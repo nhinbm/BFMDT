@@ -17,7 +17,7 @@
 | 1 | Implement utils (inversion count, ordinal mapping) | -- | `utils.py` | [X] | [ ] | [ ] |
 | 2 | Implement preprocessing (imputation, normalization) | -- | `preprocessing.py` | [ ] | [ ] | [ ] |
 | 3 | Implement evaluation metrics (CA, MAE) | -- | `metrics.py` | [ ] | [ ] | [ ] |
-| 4 | Implement Algorithm 1 (Monotonic Partition) | #1 | `monotonic_partition.py` | [ ] | [ ] | [ ] |
+| 4 | Implement Algorithm 1 (Monotonic Partition) | #1 | `monotonic_partition.py` | [X] | [ ] | [ ] |
 | 5 | Implement Algorithm 2 (Fitting Degree Matrix) | #1, #4 | `fitting_degree.py` | [ ] | [ ] | [ ] |
 | 6 | Implement sigma candidate selection | #5 | `sigma_selection.py` | [ ] | [ ] | [ ] |
 | 7 | Implement Algorithm 3 (Feature Selection) | #5 | `feature_selection.py` | [ ] | [ ] | [ ] |
