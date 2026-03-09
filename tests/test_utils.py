@@ -39,6 +39,23 @@ def test_compute_inversion_same_y_as_count():
     assert compute_inversion_count_for_feature(X, y, 0) == 0
 
 
+# --- compute_inversion_count_for_feature (descending) ---
+
+
+def test_compute_inversion_descending_tied_features_different_labels():
+    """Tied feature values should be sorted by decision desc (Alg 1, Step 4)."""
+    X = np.array([[1.0], [1.0], [2.0]])
+    y = np.array([3, 1, 2])
+    assert compute_inversion_count_for_feature(X, y, 0, ascending=False) == 1
+
+
+def test_compute_inversion_descending_same_y_as_count():
+    """Same reversed y, but accessed through feature sorting."""
+    X = np.array([[5.0], [4.0], [3.0], [2.0], [1.0]])
+    y = np.array([1, 2, 3, 4, 5])
+    assert compute_inversion_count_for_feature(X, y, 0, ascending=False) == 0
+
+
 # --- map_classes_to_ordinal ---
 
 

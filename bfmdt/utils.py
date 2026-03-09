@@ -36,19 +36,25 @@ def count_inversions(arr):
     return inversions
 
 
-def compute_inversion_count_for_feature(X, y, feature_index):
+def compute_inversion_count_for_feature(X, y, feature_index, ascending=True):
     """Sort samples by feature value, count inversions in decision values.
 
     Args:
         X (np.ndarray): Feature matrix of shape (n_samples, n_features).
         y (np.ndarray): Decision values of shape (n_samples,).
         feature_index (int): Which feature column to sort by.
+        ascending (bool): If True, count inversions for ascending monotonicity.
+            If False, count inversions for descending monotonicity.
 
     Returns:
         n_inversions (int): Inversion count of decision values when sorted by feature.
     """
-    sorted_indices = np.lexsort((y, X[:, feature_index]))
-    y_sorted = y[sorted_indices].copy()
+    if ascending:
+        sorted_indices = np.lexsort((y, X[:, feature_index]))
+        y_sorted = y[sorted_indices].astype(float).copy()
+    else:
+        sorted_indices = np.lexsort((-y, X[:, feature_index]))
+        y_sorted = (-y[sorted_indices]).astype(float).copy()
     return count_inversions(y_sorted)
 
 
