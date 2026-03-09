@@ -6,13 +6,13 @@ from bfmdt.monotonic_partition import MonotonicPartitioner
 
 @pytest.fixture
 def partitioned():
-    """X=[1,2,3,4], y=[1,3,2,4] -- has breaks in both directions."""
-    X = np.array([[1.0], [2.0], [3.0], [4.0]])
-    y = np.array([1, 3, 2, 4])
+    """X=[3,1,4,2], y=[2,1,4,3] -- unsorted, has breaks in both directions."""
+    X = np.array([[3.0], [1.0], [4.0], [2.0]])
+    y = np.array([2, 1, 4, 3])
     return MonotonicPartitioner().fit(X, y)
 
 
-# --- ascending: y_sorted=[1,3,2,4], break at 3>2 -> MMIs: [0,1], [2,3] ---
+# --- ascending: sort X asc -> y=[1,3,2,4], break at 3>2 -> AMMIs: [1,3], [0,2] ---
 
 
 def test_ascending_mmi_count(partitioned):
@@ -20,14 +20,14 @@ def test_ascending_mmi_count(partitioned):
 
 
 def test_ascending_first_mmi(partitioned):
-    np.testing.assert_array_equal(partitioned.ascending_partitions[0][0], [0, 1])
+    np.testing.assert_array_equal(partitioned.ascending_partitions[0][0], [1, 3])
 
 
 def test_ascending_second_mmi(partitioned):
-    np.testing.assert_array_equal(partitioned.ascending_partitions[0][1], [2, 3])
+    np.testing.assert_array_equal(partitioned.ascending_partitions[0][1], [0, 2])
 
 
-# --- descending: y_sorted=[1,3,2,4], breaks at 1<3 and 2<4 -> MMIs: [0], [1,2], [3] ---
+# --- descending: sort X desc -> y=[4,2,3,1], breaks at 4>2 and 3>1 ---
 
 
 def test_descending_mmi_count(partitioned):
@@ -35,15 +35,15 @@ def test_descending_mmi_count(partitioned):
 
 
 def test_descending_first_mmi(partitioned):
-    np.testing.assert_array_equal(partitioned.descending_partitions[0][0], [0])
+    np.testing.assert_array_equal(partitioned.descending_partitions[0][0], [2])
 
 
 def test_descending_second_mmi(partitioned):
-    np.testing.assert_array_equal(partitioned.descending_partitions[0][1], [1, 2])
+    np.testing.assert_array_equal(partitioned.descending_partitions[0][1], [0, 3])
 
 
 def test_descending_third_mmi(partitioned):
-    np.testing.assert_array_equal(partitioned.descending_partitions[0][2], [3])
+    np.testing.assert_array_equal(partitioned.descending_partitions[0][2], [1])
 
 
 # --- edge cases ---
