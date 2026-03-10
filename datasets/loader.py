@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 from sklearn.datasets import load_wine, fetch_openml
 from sklearn.preprocessing import LabelEncoder
 
@@ -35,7 +36,7 @@ class DatasetRegistry:
     def list_datasets(cls):
         return list(cls._registry.keys())
 
-def fetch_or_load_local(name, openml_name=None):
+def fetch_or_load_local(name, openml_name=None , data_dir="datasets/data/"):
     """
     Try loading from OpenML; if the network connection is lost, read the local CSV file. 
     If there is no OpenML name, read the local file directly.
@@ -52,25 +53,34 @@ def fetch_or_load_local(name, openml_name=None):
     
     if openml_name:
         try:
-            print(f"[Loader] Đang thử kéo '{name}' từ OpenML...")
-            data = fetch_openml(name=openml_name, version=1, as_frame=False, parser='auto')
-            X, y_raw = data.data, data.target
+            print(f"[Loader] Fetching dataset '{name}' from OpenML...")
+            if name == 'SMK_CAN_187':
+                data = fetch_openml(name=openml_name, version=1, as_frame=True, parser='auto')
+                X = data.data.values
+                y_raw = data.target.values
+            else:
+                data = fetch_openml(name=openml_name, version=1, as_frame=False, parser='auto')
+                X, y_raw = data.data, data.target
             print(f" -> API download successful!")
         except Exception as e:
             print(f" -> Network/API Error: {e}. Switch to reading local files...")
             openml_name = None
             
     if not openml_name:
-        file_path = f"data/{name}.csv"
+        file_path = f"{data_dir}{OPENML_DATASETS[name]}.csv"
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found at '{file_path}'. Please download the data manually!")
         print(f"[Loader] Reading from {file_path}...")
         df = pd.read_csv(file_path)
-        X = df.iloc[:, :-1].values
-        y_raw = df.iloc[:, -1].values
+        if name == 'turkiye-student':
+            X = df.drop(df.columns[4], axis=1).values
+            y_raw = df.iloc[:, 4].values
+        else:
+            X = df.iloc[:, :-1].values
+            y_raw = df.iloc[:, -1].values
 
     y = LabelEncoder().fit_transform(y_raw)
-    return X, y
+    return X, y_raw
 
 OPENML_DATASETS = {
     'breast-wisconsin': 'breast-w',
@@ -83,9 +93,16 @@ OPENML_DATASETS = {
     'wine-quality': 'wine-quality-white',
     'sonar': 'sonar',
     'arcene': 'arcene',
+    'turkiye-student': 'turkiye-student-evaluation',
+    # 'DrivFace': 'DrivFace',
+    'wdbc': 'wdbc',
+    'divorce': 'divorce_prediction',
+    # 'Yale': 'Yale',
+    'SMK_CAN_187': 'SMK',
+    # 'PEMS-SF': 'PEMS-SF'
 }
 
-# TODO: Add more datasets {turkiye-student, DrivFace wdbc, divorce, Yale, SMK_CAN_187, PEMS-SF}.
+# TODO: Add more datasets {DrivFace, Yale, PEMS-SF}.
 
 for ds_name, openml_name in OPENML_DATASETS.items():
     @DatasetRegistry.register(ds_name)
@@ -97,7 +114,7 @@ def get_wine_data():
     data = load_wine()
     return data.data, data.target
 
-def load_dataset(name, data_dir="data/"):
+def load_dataset(name, data_dir="datasets/data/"):
     """
     Load a dataset by name.
     If it's registered in the DatasetRegistry, use the registered loader.
