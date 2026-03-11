@@ -12,9 +12,9 @@
 
 ## Tasks
 
-| # | Task | Blocked by | File | Member A | Member B | Member C |
+| # | Task | Blocked by | File | Nhi | Khang | Thuật |
 |---|------|------------|------|----------|----------|----------|
-| 1 | Implement utils (inversion count, ordinal mapping) | -- | `utils.py` | [ ] | [ ] | [ ] |
+| 1 | Implement utils (inversion count, ordinal mapping) | -- | `utils.py` | [X] | [ ] | [ ] |
 | 2 | Implement preprocessing (imputation, normalization) | -- | `preprocessing.py` | [ ] | [ ] | [ ] |
 | 3 | Implement evaluation metrics (CA, MAE) | -- | `metrics.py` | [ ] | [ ] | [ ] |
 | 4 | Implement Algorithm 1 (Monotonic Partition) | #1 | `monotonic_partition.py` | [ ] | [ ] | [ ] |
