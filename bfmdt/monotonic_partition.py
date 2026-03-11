@@ -63,13 +63,13 @@ class MonotonicPartitioner:
         if n_samples <= 1:
             return [np.arange(n_samples)]
 
-        if direction == "ascending":
-            sorted_indices = np.lexsort((y, X[:, feature_index]))
-        else:
-            sorted_indices = np.lexsort((y, -X[:, feature_index]))
+        sorted_indices = np.lexsort((y, X[:, feature_index]))
 
         y_sorted = y[sorted_indices]
-        breaks = y_sorted[:-1] > y_sorted[1:]
+        if direction == "ascending":
+            breaks = y_sorted[:-1] > y_sorted[1:]
+        else:
+            breaks = y_sorted[:-1] < y_sorted[1:]
 
         split_points = np.where(breaks)[0] + 1
         mmis = np.split(sorted_indices, split_points)
