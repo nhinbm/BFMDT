@@ -50,10 +50,11 @@ def test_compute_inversion_descending_tied_features_different_labels():
 
 
 def test_compute_inversion_descending_same_y_as_count():
-    """Same reversed y, but accessed through feature sorting."""
+    """Inversion count is direction-independent; sorted ascending by feature gives y=[5,4,3,2,1]."""
     X = np.array([[5.0], [4.0], [3.0], [2.0], [1.0]])
     y = np.array([1, 2, 3, 4, 5])
-    assert compute_inversion_count_for_feature(X, y, 0, ascending=False) == 0
+    assert compute_inversion_count_for_feature(X, y, 0, ascending=False) == 10
+
 
 
 # --- map_classes_to_ordinal ---

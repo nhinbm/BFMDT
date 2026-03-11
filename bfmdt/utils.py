@@ -49,12 +49,8 @@ def compute_inversion_count_for_feature(X, y, feature_index, ascending=True):
     Returns:
         n_inversions (int): Inversion count of decision values when sorted by feature.
     """
-    if ascending:
-        sorted_indices = np.lexsort((y, X[:, feature_index]))
-        y_sorted = y[sorted_indices].astype(float).copy()
-    else:
-        sorted_indices = np.lexsort((-y, X[:, feature_index]))
-        y_sorted = (-y[sorted_indices]).astype(float).copy()
+    sorted_indices = np.lexsort((y, X[:, feature_index]))
+    y_sorted = y[sorted_indices].astype(float).copy()
     return count_inversions(y_sorted)
 
 

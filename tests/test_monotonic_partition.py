@@ -27,7 +27,7 @@ def test_ascending_second_mmi(partitioned):
     np.testing.assert_array_equal(partitioned.ascending_partitions[0][1], [0, 2])
 
 
-# --- descending: sort X desc -> y=[4,2,3,1], breaks at 4>2 and 3>1 ---
+# --- descending: sort X asc -> y=[1,3,2,4], breaks at 1<3 and 2<4 ---
 
 
 def test_descending_mmi_count(partitioned):
@@ -35,15 +35,15 @@ def test_descending_mmi_count(partitioned):
 
 
 def test_descending_first_mmi(partitioned):
-    np.testing.assert_array_equal(partitioned.descending_partitions[0][0], [2])
+    np.testing.assert_array_equal(partitioned.descending_partitions[0][0], [1])
 
 
 def test_descending_second_mmi(partitioned):
-    np.testing.assert_array_equal(partitioned.descending_partitions[0][1], [0, 3])
+    np.testing.assert_array_equal(partitioned.descending_partitions[0][1], [3, 0])
 
 
 def test_descending_third_mmi(partitioned):
-    np.testing.assert_array_equal(partitioned.descending_partitions[0][2], [1])
+    np.testing.assert_array_equal(partitioned.descending_partitions[0][2], [2])
 
 
 # --- edge cases ---
@@ -54,11 +54,16 @@ def test_single_sample():
     assert len(mp.ascending_partitions[0]) == 1
 
 
-def test_tied_features_one_mmi_both_directions():
-    """Tied features: ties broken by y -> one MMI in both directions."""
+def test_tied_features_one_mmi_ascending():
+    """Tied features: ties broken by y ascending -> one ascending MMI."""
     mp = MonotonicPartitioner().fit(np.array([[1.0], [1.0], [1.0]]), np.array([3, 1, 2]))
     assert len(mp.ascending_partitions[0]) == 1
-    assert len(mp.descending_partitions[0]) == 1
+
+
+def test_tied_features_three_mmis_descending():
+    """Tied features: y=[1,2,3] after sort, every pair increases -> 3 descending MMIs."""
+    mp = MonotonicPartitioner().fit(np.array([[1.0], [1.0], [1.0]]), np.array([3, 1, 2]))
+    assert len(mp.descending_partitions[0]) == 3
 
 
 def test_multiple_features():
