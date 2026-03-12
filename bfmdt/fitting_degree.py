@@ -54,10 +54,10 @@ class FittingDegreeComputer:
 
         for j in range(n_features):
             F_asc = FittingDegreeComputer._compute_fitting_for_direction(
-                X, y, j, ascending_partitions, class_size, n_samples, denom, ascending=True
+                X, y, j, ascending_partitions, class_size, n_samples, denom
             )
             F_desc = FittingDegreeComputer._compute_fitting_for_direction(
-                X, y, j, descending_partitions, class_size, n_samples, denom, ascending=False
+                X, y, j, descending_partitions, class_size, n_samples, denom
             )
 
             # --- Direction decision (Eq. 22) ---
@@ -79,7 +79,7 @@ class FittingDegreeComputer:
 
     @staticmethod
     def _compute_fitting_for_direction(
-        X, y, j, partitions, class_size, n_samples, denom, ascending
+        X, y, j, partitions, class_size, n_samples, denom
     ):
         """Compute per-sample fitting degree for one feature in one direction.
 
@@ -91,12 +91,11 @@ class FittingDegreeComputer:
             class_size (dict): Mapping from class label to total count.
             n_samples (int): Total number of samples.
             denom (int): Global factor denominator N(N-1).
-            ascending (bool): If True, ascending direction; otherwise descending.
 
         Returns:
             F (np.ndarray): Fitting degree per sample, shape (n_samples,).
         """
-        inv = compute_inversion_count_for_feature(X, y, j, ascending=ascending)
+        inv = compute_inversion_count_for_feature(X, y, j)
         global_factor = 1.0 - 2.0 * inv / denom
         return FittingDegreeComputer._compute_local_fitting(
             partitions[j], y, class_size, n_samples, global_factor
