@@ -14,15 +14,15 @@
 
 | # | Task | Blocked by | File | Nhi | Khang | Thuật |
 |---|------|------------|------|----------|----------|----------|
-| 1 | Implement utils (inversion count, ordinal mapping) | -- | `utils.py` | [X] | [ ] | [ ] |
-| 2 | Implement preprocessing (imputation, normalization) | -- | `preprocessing.py` | [ ] | [ ] | [ ] |
-| 3 | Implement evaluation metrics (CA, MAE) | -- | `metrics.py` | [ ] | [ ] | [ ] |
-| 4 | Implement Algorithm 1 (Monotonic Partition) | #1 | `monotonic_partition.py` | [X] | [ ] | [ ] |
-| 5 | Implement Algorithm 2 (Fitting Degree Matrix) | #1, #4 | `fitting_degree.py` | [ ] | [ ] | [ ] |
-| 6 | Implement sigma candidate selection | #5 | `sigma_selection.py` | [ ] | [ ] | [ ] |
-| 7 | Implement Algorithm 3 (Feature Selection) | #5 | `feature_selection.py` | [ ] | [ ] | [ ] |
-| 8 | Implement Monotonic Decision Tree (ARMI/DRMI, fit, predict_dsl) | -- | `monotonic_decision_tree.py` | [ ] | [ ] | [ ] |
-| 9 | Implement dataset loader + registry | -- | `datasets/` | [ ] | [ ] | [ ] |
+| 1 | Implement utils (inversion count, ordinal mapping) | -- | `utils.py` | [X] |  |  |
+| 2 | Implement preprocessing (imputation, normalization) | -- | `preprocessing.py` |  |  | [X] |
+| 3 | Implement evaluation metrics (CA, MAE) | -- | `metrics.py` |  |  | [X] |
+| 4 | Implement Algorithm 1 (Monotonic Partition) | #1 | `monotonic_partition.py` | [X] |  |  |
+| 5 | Implement Algorithm 2 (Fitting Degree Matrix) | #1, #4 | `fitting_degree.py` | [X] |  |  |
+| 6 | Implement sigma candidate selection | #5 | `sigma_selection.py` | [X] |  |  |
+| 7 | Implement Algorithm 3 (Feature Selection) | #5 | `feature_selection.py` |  | [X] | |
+| 8 | Implement Monotonic Decision Tree (ARMI/DRMI, fit, predict_dsl) | -- | `monotonic_decision_tree.py` |  | [X] |  |
+| 9 | Implement dataset loader + registry | -- | `datasets/` |  |  | [X] |
 | 10 | Implement BFMDTClassifier (fit, predict, predict_proba) | #1-#8 | `bfmdt_classifier.py` | [ ] | [ ] | [ ] |
 | 11 | Implement config + CLI argument parsing | #1-#10 | `config.py` | [ ] | [ ] | [ ] |
 | 12 | Run benchmarks on datasets 1-9 (small) | #9-#11 | `experiments/run_benchmarks.py` | [ ] | [ ] | [ ] |
