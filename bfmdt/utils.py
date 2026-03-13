@@ -10,8 +10,30 @@ def count_inversions(arr):
     Returns:
         n_inversions (int): Number of pairs (i, j) where i < j but arr[i] > arr[j].
     """
-    # TODO: implement
-    raise NotImplementedError
+    if len(arr) <= 1:
+        return 0
+
+    mid = len(arr) // 2
+    left = arr[:mid].copy()
+    right = arr[mid:].copy()
+
+    inversions = count_inversions(left) + count_inversions(right)
+
+    i = j = k = 0
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]:
+            arr[k] = left[i]
+            i += 1
+        else:
+            arr[k] = right[j]
+            inversions += len(left) - i
+            j += 1
+        k += 1
+
+    arr[k:k + len(left) - i] = left[i:]
+    arr[k + len(left) - i:] = right[j:]
+
+    return inversions
 
 
 def compute_inversion_count_for_feature(X, y, feature_index):
@@ -25,8 +47,9 @@ def compute_inversion_count_for_feature(X, y, feature_index):
     Returns:
         n_inversions (int): Inversion count of decision values when sorted by feature.
     """
-    # TODO: implement
-    raise NotImplementedError
+    sorted_indices = np.lexsort((y, X[:, feature_index]))
+    y_sorted = y[sorted_indices].astype(float).copy()
+    return count_inversions(y_sorted)
 
 
 def map_classes_to_ordinal(y):
@@ -39,5 +62,7 @@ def map_classes_to_ordinal(y):
         y_mapped (np.ndarray): Integer-encoded labels of shape (n_samples,).
         label_map (dict): Mapping from original label to encoded integer.
     """
-    # TODO: implement
-    raise NotImplementedError
+    unique_labels = np.unique(y)
+    label_map = {label: i for i, label in enumerate(unique_labels)}
+    y_mapped = np.array([label_map[label] for label in y], dtype=int)
+    return y_mapped, label_map
