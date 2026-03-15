@@ -53,11 +53,16 @@ class FittingDegreeComputer:
         denom = n_samples * (n_samples - 1) if n_samples > 1 else 1
 
         for j in range(n_features):
-            F_asc = FittingDegreeComputer._compute_fitting_for_direction(
-                X, y, j, ascending_partitions, class_size, n_samples, denom
+            inv = compute_inversion_count_for_feature(X, y, j)
+
+            gf_asc = 1.0 - 2.0 * inv / denom
+            gf_desc = 2.0 * inv / denom
+
+            F_asc = FittingDegreeComputer._compute_local_fitting(
+                ascending_partitions[j], y, class_size, n_samples, gf_asc
             )
-            F_desc = FittingDegreeComputer._compute_fitting_for_direction(
-                X, y, j, descending_partitions, class_size, n_samples, denom
+            F_desc = FittingDegreeComputer._compute_local_fitting(
+                descending_partitions[j], y, class_size, n_samples, gf_desc
             )
 
             # --- Direction decision (Eq. 22) ---

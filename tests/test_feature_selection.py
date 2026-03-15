@@ -62,7 +62,7 @@ def test_find_reducts_example_paper(example_2_matrix):
     
     assert len(reducts) > 0, "The algorithm must find at least 1 reduct"
     
-    expected_reducts = [[1], [3, 1]]
+    expected_reducts = [[1], [3, 5]]
     assert len(reducts) == len(expected_reducts), f"Expected {len(expected_reducts)} reducts, got {len(reducts)}"
     for r in expected_reducts:
         assert sorted(r) in [sorted(x) for x in reducts], f"Expected reduct {r} not found in {reducts}"

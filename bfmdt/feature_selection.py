@@ -60,9 +60,12 @@ class FeatureSelector:
             # Update M*: delete the rows satisfied by the selected feature
             rows_to_keep = M_temp[:, a_k] == 0
             M_temp = M_temp[rows_to_keep]
-            
-            # Update m': delete the selected column
-            available_features.remove(a_k)
+
+            # Update m': exclude current OFS feature and all other OFS features
+            # (Algorithm 3: A is updated globally across OFS iterations)
+            for ofs_feat in OFS:
+                if ofs_feat in available_features:
+                    available_features.remove(ofs_feat)
 
             while M_temp.shape[0] > 0 and len(available_features) > 0:
                 # Greedily pick the feature that covers the most remaining rows

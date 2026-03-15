@@ -89,29 +89,33 @@ class MonotonicDecisionTree:
         return armi
 
     def _compute_drmi(self, mask_L, y):
-        """Calculate Descending Rank Mutual Information"""
+        """Calculate Descending Rank Mutual Information.
+
+        For descending monotonicity, the left branch (low feature) should
+        concentrate high-class samples.  We measure this using the dominance
+        set (D >= D(x_i)) on the left branch, mirroring how ARMI uses the
+        dominance set on the right branch for ascending monotonicity.
+        """
         N = len(y)
         L_size = np.sum(mask_L)
         if L_size == 0 or L_size == N:
             return 0.0
-            
-        # Calculate the size of the inferiority set for y (E_i) over the entire node
+
+        # Dominance set sizes: |{x | D(x) >= D(x_i)}| over the entire node
         classes, counts = np.unique(y, return_counts=True)
-        counts_le = np.cumsum(counts)
-        E_map = dict(zip(classes, counts_le))
-        
-        # Map E_i for samples falling into the left branch
+        counts_ge = np.cumsum(counts[::-1])[::-1]
+        D_map = dict(zip(classes, counts_ge))
+
         y_L = y[mask_L]
-        E_i = np.array([E_map[yi] for yi in y_L])
-        
-        # Calculate the intersection size of the left branch and the inferiority set (L_E_i)
+        D_i = np.array([D_map[yi] for yi in y_L])
+
+        # Dominance set sizes within the left branch
         classes_L, counts_L = np.unique(y_L, return_counts=True)
-        counts_L_le = np.cumsum(counts_L)
-        L_E_map = dict(zip(classes_L, counts_L_le))
-        L_E_i = np.array([L_E_map[yi] for yi in y_L])
-        
-        # Calculate DRMI
-        ratio = (L_size * E_i) / (N * L_E_i)
+        counts_L_ge = np.cumsum(counts_L[::-1])[::-1]
+        L_D_map = dict(zip(classes_L, counts_L_ge))
+        L_D_i = np.array([L_D_map[yi] for yi in y_L])
+
+        ratio = (L_size * D_i) / (N * L_D_i)
         drmi = -np.sum(np.log(ratio)) / N
         return drmi
 

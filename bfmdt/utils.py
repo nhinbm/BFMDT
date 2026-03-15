@@ -52,6 +52,21 @@ def compute_inversion_count_for_feature(X, y, feature_index):
     return count_inversions(y_sorted)
 
 
+def count_tied_pairs(X, feature_index):
+    """Count pairs of samples with identical feature values.
+
+    Args:
+        X (np.ndarray): Feature matrix of shape (n_samples, n_features).
+        feature_index (int): Which feature column to check.
+
+    Returns:
+        n_tied (int): Number of pairs (i, j) where i < j and
+            X[i, feature_index] == X[j, feature_index].
+    """
+    _, counts = np.unique(X[:, feature_index], return_counts=True)
+    return int(np.sum(counts * (counts - 1) // 2))
+
+
 def map_classes_to_ordinal(y):
     """Map arbitrary class labels to contiguous integers 0, 1, ..., K-1.
 
