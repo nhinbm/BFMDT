@@ -23,8 +23,8 @@
 | 7 | Implement Algorithm 3 (Feature Selection) | #5 | `feature_selection.py` |  | [X] | |
 | 8 | Implement Monotonic Decision Tree (ARMI/DRMI, fit, predict_dsl) | -- | `monotonic_decision_tree.py` |  | [X] |  |
 | 9 | Implement dataset loader + registry | -- | `datasets/` |  |  | [X] |
-| 10 | Implement BFMDTClassifier (fit, predict, predict_proba) | #1-#8 | `bfmdt_classifier.py` | [X] | [ ] | [ ] |
-| 11 | Implement config + CLI argument parsing | #1-#10 | `config.py` | [ ] | [ ] | [ ] |
+| 10 | Implement BFMDTClassifier (fit, predict, predict_proba) | #1-#8 | `bfmdt_classifier.py` | [X] | | |
+| 11 | Implement config + CLI argument parsing | #1-#10 | `config.py` | [X] | | |
 | 12 | Run benchmarks on datasets 1-9 (small) | #9-#11 | `experiments/run_benchmarks.py` | [ ] | [ ] | [ ] |
 | 13 | Run benchmarks on datasets 10-13 (medium) | #9-#11 | `experiments/run_benchmarks.py` | [ ] | [ ] | [ ] |
 | 14 | Run benchmarks on datasets 14-18 (large) | #9-#11 | `experiments/run_benchmarks.py` | [ ] | [ ] | [ ] |
