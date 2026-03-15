@@ -41,7 +41,7 @@ For datasets not available in sklearn.datasets or OpenML, you need to download t
 
 2. Run the download script:
    ```
-   python download_datasets.py
+   python datasets/download_datasets.py
    ```
    This will download the datasets from Google Drive to `datasets/data/`.
 
