@@ -15,10 +15,10 @@ class Evaluator:
 
     @staticmethod
     def classification_accuracy(y_true, y_pred):
-        # TODO: implement
-        raise NotImplementedError
+        accuracy = np.mean(y_true == y_pred)
+        return float(accuracy)
 
     @staticmethod
     def mean_absolute_error_ordinal(y_true, y_pred):
-        # TODO: implement
-        raise NotImplementedError
+        mae = np.mean(np.abs(y_true - y_pred))
+        return float(mae)

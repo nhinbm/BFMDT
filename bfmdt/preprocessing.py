@@ -64,6 +64,8 @@ class Preprocessor:
         
         X_clean = X_clean[:, self.valid_features_mask_]
         self.feature_min_ = self.feature_min_[self.valid_features_mask_]
+        self.feature_max_ = self.feature_max_[self.valid_features_mask_]
+        self.feature_mean_ = self.feature_mean_[self.valid_features_mask_]
         feature_range = feature_range[self.valid_features_mask_]
         
         X_clean = (X_clean - self.feature_min_) / feature_range
@@ -90,13 +92,13 @@ class Preprocessor:
                     X_clean[non_nan_mask, col_idx] = le.transform(safe_data)
 
         X_clean = X_clean.astype(float)
-        
+
+        X_clean = X_clean[:, self.valid_features_mask_]
+
         nan_mask = np.isnan(X_clean)
         X_clean = np.where(nan_mask, self.feature_mean_, X_clean)
-        
-        X_clean = X_clean[:, self.valid_features_mask_]
-        
-        feature_range = self.feature_max_[self.valid_features_mask_] - self.feature_min_
+
+        feature_range = self.feature_max_ - self.feature_min_
         X_clean = (X_clean - self.feature_min_) / feature_range
         
         X_clean = np.clip(X_clean, 0.0, 1.0)
