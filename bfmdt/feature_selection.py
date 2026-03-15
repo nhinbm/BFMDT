@@ -19,6 +19,7 @@ class FeatureSelector:
     def find_reducts(self, fitting_matrix, sigma):
         # Initialize the feature subsets RED_sigma(A) = empty
         reducts = []
+        seen = set()
 
         # Set c_ij as 1 if c_ij >= sigma the others as 0
         M_sigma = (fitting_matrix >= sigma).astype(int)
@@ -84,7 +85,10 @@ class FeatureSelector:
                 # Update m': delete the selected column
                 available_features.remove(best_feature)
 
-            reducts.append(red)
+            key = tuple(sorted(red))
+            if key not in seen:
+                seen.add(key)
+                reducts.append(red)
 
         return reducts
 

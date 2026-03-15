@@ -62,9 +62,10 @@ def test_find_reducts_example_paper(example_2_matrix):
     
     assert len(reducts) > 0, "The algorithm must find at least 1 reduct"
     
-    # The greedy heuristic should find [1] first because feature 'b' 
-    # covers all samples with values >= 0.5 in the matrix (excluding empty rows)
-    assert [1] in reducts or any(1 in r for r in reducts), "Feature b (index 1) is crucial and must appear in the reducts"
+    expected_reducts = [[1], [3, 1]]
+    assert len(reducts) == len(expected_reducts), f"Expected {len(expected_reducts)} reducts, got {len(reducts)}"
+    for r in expected_reducts:
+        assert sorted(r) in [sorted(x) for x in reducts], f"Expected reduct {r} not found in {reducts}"
 
 def test_edge_case_all_zeros():
     """
