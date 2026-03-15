@@ -20,6 +20,12 @@ class SigmaSelector:
     def select(self, fitting_matrix):
         """Select sigma candidates from fitting degree matrix values.
 
+        For small datasets where the number of unique fitting degree values
+        is within the allowed range, all values are used (exhaustive search).
+        For large datasets, frequency-based pruning selects values whose
+        frequency exceeds L/sp, adjusting sp until the candidate count
+        falls within [min_candidates, max_candidates] (Section 5.4.1).
+
         Args:
             fitting_matrix (np.ndarray): Fitting degree matrix of shape
                 (n_samples, n_features). Values in [0, 1].
@@ -27,10 +33,15 @@ class SigmaSelector:
         Returns:
             list[float]: Sorted list of sigma candidate values.
         """
+        unique_values, counts = np.unique(fitting_matrix, return_counts=True)
+
+        # Small dataset: exhaustive search with all unique values
+        if len(unique_values) <= self.max_candidates:
+            return sorted(unique_values.tolist())
+
+        # Large dataset: frequency-based pruning
         n_samples, n_features = fitting_matrix.shape
         L = max(n_samples, n_features)
-
-        unique_values, counts = np.unique(fitting_matrix, return_counts=True)
 
         sp = 1.0
         max_iterations = 1000
