@@ -22,3 +22,4 @@ class Evaluator:
     def mean_absolute_error_ordinal(y_true, y_pred):
         mae = np.mean(np.abs(y_true - y_pred))
         return float(mae)
+
