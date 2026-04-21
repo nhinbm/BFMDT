@@ -68,10 +68,10 @@ class FittingDegreeComputer:
             # --- Direction decision (Eq. 22) ---
             if np.sum(F_asc) >= np.sum(F_desc):
                 monotone_directions[j] = 1
-                matrix[:, j] = F_asc
             else:
                 monotone_directions[j] = -1
-                matrix[:, j] = F_desc
+
+            matrix[:, j] = F_asc
 
         # Invert decreasing features (Algorithm 2, lines 13-15)
         desc_mask = monotone_directions == -1

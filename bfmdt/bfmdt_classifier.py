@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.base import BaseEstimator, ClassifierMixin
 
 from .preprocessing import Preprocessor
 from .monotonic_partition import MonotonicPartitioner
@@ -10,7 +11,7 @@ from .metrics import Evaluator
 from .utils import map_classes_to_ordinal
 
 
-class BFMDTClassifier:
+class BFMDTClassifier(ClassifierMixin, BaseEstimator):
     """Orchestrate the full BFMDT pipeline.
 
     Args:
