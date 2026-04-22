@@ -13,6 +13,7 @@ YALE_DIR = os.path.join(DATA_DIR, "yale")
 DRIVFACE_DIR = os.path.join(DATA_DIR, "DrivFace")
 PEMS_SF_DIR = os.path.join(DATA_DIR, "pems-sf")
 YALE_MAT_PATH = os.path.join(YALE_DIR, "Yale.mat")
+REPORTS_DIR = os.path.join(os.path.dirname(__file__), "reports")
 
 
 # ---------------------------------------------------------------------------
@@ -53,6 +54,7 @@ DATASET_NAMES_BY_ID = {
     18: "PEMS-SF",
 }
 ALL_DATASET_NAMES = list(DATASET_NAMES_BY_ID.values())
+NAME_TO_ID = {v: k for k, v in DATASET_NAMES_BY_ID.items()}
 
 
 @dataclass
@@ -84,6 +86,8 @@ class BFMDTConfig:
     n_folds: int = 5
     test_size: float = 0.2
     random_seed: int = 0
+    mode: str = "cv"
+    report: str = "all"
     dataset_names: list[str] = field(default_factory=lambda: list(ALL_DATASET_NAMES))
 
 
@@ -179,6 +183,15 @@ def parse_args(argv=None) -> BFMDTConfig:
         "--seed", type=int, default=0,
         help="Random seed (default: 0)",
     )
+    parser.add_argument(
+        "--mode", choices=["cv", "reporting"], default="cv",
+        help="'cv' runs k-fold CV only; 'reporting' runs CV + comparison tables "
+             "vs paper (select which via --report) (default: cv)",
+    )
+    parser.add_argument(
+        "--report", choices=["sigma", "ca-mae", "reducts", "time", "all"], default="all",
+        help="Which comparison table(s) to print in 'reporting' mode (default: all)",
+    )
 
     args = parser.parse_args(argv)
 
@@ -191,5 +204,7 @@ def parse_args(argv=None) -> BFMDTConfig:
         n_folds=args.n_folds,
         test_size=args.test_size,
         random_seed=args.seed,
+        mode=args.mode,
+        report=args.report,
         dataset_names=_resolve_dataset_arg(args.datasets),
     )

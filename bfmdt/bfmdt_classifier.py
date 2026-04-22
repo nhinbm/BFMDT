@@ -43,6 +43,8 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
         self.max_reducts = max_reducts
         self.trees = None
         self.best_sigma = None
+        self.n_sigma_candidates = None
+        self.n_reducts = None
         self.preprocessor = None
         self.fitting_matrix = None
         self.monotone_directions = None
@@ -51,12 +53,22 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
         self.label_map_ = None
         self.inverse_label_map_ = None
 
-    def fit(self, X, y):
+    def fit(self, X, y, X_eval=None, y_eval=None):
         """Train the BFMDT classifier (Algorithm 4).
 
         Args:
             X (np.ndarray): Raw feature matrix of shape (n_samples, n_features).
             y (np.ndarray): Raw decision labels of shape (n_samples,).
+            X_eval (np.ndarray | None): Optional held-out features for σ selection.
+            y_eval (np.ndarray | None): Optional held-out labels for σ selection.
+
+        Note:
+            Paper Algorithm 4 selects σ_best by accuracy on the prediction set X
+            (i.e. the test/eval set), not on the training set. When X_eval/y_eval
+            are passed, this implementation follows the paper: σ is tuned on the
+            eval set. This is hyperparameter tuning on held-out data, so reported
+            metrics on the same eval set are optimistically biased. When eval is
+            not passed, σ falls back to training-accuracy selection (sklearn-style).
 
         Returns:
             self: The fitted classifier.
@@ -84,16 +96,26 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
         self.monotone_directions = fd.monotone_directions
         X_adjusted = fd.X_adjusted
 
+        eval_X_adj, eval_y_ord = None, None
+        if X_eval is not None and y_eval is not None:
+            X_eval_clean = self.preprocessor.transform(X_eval)
+            eval_X_adj = X_eval_clean.copy()
+            desc_mask = self.monotone_directions == -1
+            eval_X_adj[:, desc_mask] = 1.0 - eval_X_adj[:, desc_mask]
+            eval_y_ord = np.array([self.label_map_[yi] for yi in y_eval])
+
         # Step 5: Sigma candidates
         if self.sigma == "auto":
             sigma_candidates = SigmaSelector().select(self.fitting_matrix)
         else:
             sigma_candidates = [float(self.sigma)]
+        self.n_sigma_candidates = len(sigma_candidates)
 
         # Steps 6-8: For each sigma, build trees and select best
         best_accuracy = -1.0
         best_trees = []
         best_sigma = None
+        best_n_reducts = 0
         fs = FeatureSelector(max_reducts=self.max_reducts)
 
         for sigma_val in sigma_candidates:
@@ -114,22 +136,32 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
                     tree.fit(X_adjusted, y_ordinal, feature_indices=reduct)
                     trees.append(tree)
 
-            # Step 7: Fuse DSL and evaluate (Eq 35-36)
-            dsl_sum = np.zeros((X_adjusted.shape[0], self.n_classes_))
-            for tree in trees:
-                dsl_sum += tree.predict_dsl(X_adjusted)
-            y_pred = np.argmax(dsl_sum, axis=1)
-            acc = Evaluator.classification_accuracy(y_ordinal, y_pred)
+            # Step 7: Fuse DSL on eval target (paper Alg 4 line 12: acc on X)
+            if eval_X_adj is not None:
+                target_X, target_y = eval_X_adj, eval_y_ord
+            else:
+                target_X, target_y = X_adjusted, y_ordinal
+            y_pred = self._predict_with_trees(trees, target_X)
+            acc = Evaluator.classification_accuracy(target_y, y_pred)
 
             # Step 8: Track best sigma
             if acc > best_accuracy:
                 best_accuracy = acc
                 best_trees = trees
                 best_sigma = sigma_val
+                best_n_reducts = len(reducts)
 
         self.trees = best_trees
         self.best_sigma = best_sigma
+        self.n_reducts = best_n_reducts
         return self
+
+    def _predict_with_trees(self, trees, X_adjusted):
+        """Fuse DSL from a set of trees on already-adjusted X → ordinal predictions."""
+        dsl_sum = np.zeros((X_adjusted.shape[0], self.n_classes_))
+        for tree in trees:
+            dsl_sum += tree.predict_dsl(X_adjusted)
+        return np.argmax(dsl_sum, axis=1)
 
     def _compute_fused_dsl(self, X):
         """Compute fused DSL for samples (prediction steps 1-3).
