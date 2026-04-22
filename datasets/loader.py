@@ -11,6 +11,7 @@ from config import (
     DATA_DIR,
     DRIVFACE_DIR,
     DRIVFACE_IMAGE_SIZE,
+    OPENML_CACHE_DIR,
     PEMS_SF_DIR,
     PEMS_SF_EXPECTED_SHAPE,
     YALE_DIR,
@@ -90,11 +91,11 @@ def fetch_or_load_local(name, openml_name=None, data_dir=DATA_DIR) -> Tuple[np.n
     if openml_name:
         try:
             if name == 'SMK_CAN_187':
-                data = fetch_openml(name=openml_name, version=1, as_frame=True, parser='auto')
+                data = fetch_openml(name=openml_name, version=1, as_frame=True, parser='auto', data_home=OPENML_CACHE_DIR)
                 X = np.asarray(data.data)
                 y_raw = np.asarray(data.target)
             else:
-                data = fetch_openml(name=openml_name, version=1, as_frame=False, parser='auto')
+                data = fetch_openml(name=openml_name, version=1, as_frame=False, parser='auto', data_home=OPENML_CACHE_DIR)
                 X, y_raw = data.data, data.target
         except Exception as e:
             print(f"[Loader] OpenML fetch failed for '{name}': {e}. Falling back to local CSV.")

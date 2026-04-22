@@ -13,6 +13,7 @@ YALE_DIR = os.path.join(DATA_DIR, "yale")
 DRIVFACE_DIR = os.path.join(DATA_DIR, "DrivFace")
 PEMS_SF_DIR = os.path.join(DATA_DIR, "pems-sf")
 YALE_MAT_PATH = os.path.join(YALE_DIR, "Yale.mat")
+OPENML_CACHE_DIR = os.path.join(DATA_DIR, "openml_cache")
 REPORTS_DIR = os.path.join(os.path.dirname(__file__), "reports")
 
 
