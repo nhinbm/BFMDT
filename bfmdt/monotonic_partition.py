@@ -60,16 +60,35 @@ class MonotonicPartitioner:
         """
         n_samples = X.shape[0]
 
-        if n_samples <= 1:
-            return [np.arange(n_samples)]
+        if n_samples == 0:
+            raise ValueError(
+                f"Cannot partition feature {feature_index}: empty sample set."
+            )
 
-        sorted_indices = np.lexsort((y, X[:, feature_index]))
+        if n_samples == 1:
+            return [np.arange(1)]
 
-        y_sorted = y[sorted_indices]
         if direction == "ascending":
-            breaks = y_sorted[:-1] > y_sorted[1:]
+            sorted_indices = np.lexsort((y, X[:, feature_index]))
+        elif direction == "descending":
+            sorted_indices = np.lexsort((-y, X[:, feature_index]))
         else:
-            breaks = y_sorted[:-1] < y_sorted[1:]
+            raise ValueError(
+                f"direction must be 'ascending' or 'descending', got {direction!r}"
+            )
+
+        x_sorted = X[sorted_indices, feature_index]
+        y_sorted = y[sorted_indices]
+
+        if direction == "ascending":
+            monotonicity_breaks = y_sorted[:-1] > y_sorted[1:]
+        else:
+            monotonicity_breaks = y_sorted[:-1] < y_sorted[1:]
+
+        # Def. 7 cond. 2 (convexity): samples sharing a feature value must
+        # stay in the same MMI, so only break where the feature changes.
+        feature_changes = x_sorted[:-1] != x_sorted[1:]
+        breaks = feature_changes & monotonicity_breaks
 
         split_points = np.where(breaks)[0] + 1
         mmis = np.split(sorted_indices, split_points)

@@ -45,8 +45,6 @@ class _Tee:
         self._stdout = None
 
     def __enter__(self):
-        # buffering=1 = line-buffered: flushes to disk on every newline, so the
-        # log file updates in real time (useful for monitoring background runs).
         self._file = open(self.log_path, "w", buffering=1, encoding="utf-8")
         self._stdout = sys.stdout
         sys.stdout = self
