@@ -11,6 +11,7 @@ from config import (
     DATA_DIR,
     DRIVFACE_DIR,
     DRIVFACE_IMAGE_SIZE,
+    NAME_TO_ID,
     OPENML_CACHE_DIR,
     PEMS_SF_DIR,
     PEMS_SF_EXPECTED_SHAPE,
@@ -102,7 +103,7 @@ def fetch_or_load_local(name, openml_name=None, data_dir=DATA_DIR) -> Tuple[np.n
             openml_name = None
 
     if not openml_name:
-        file_path = os.path.join(data_dir, OPENML_DATASETS[name] + ".csv")
+        file_path = os.path.join(data_dir, f"{NAME_TO_ID[name]:02d}_{name}.csv")
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found at '{file_path}'. Please download the data manually!")
         df = pd.read_csv(file_path)
