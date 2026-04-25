@@ -4,6 +4,7 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 from .preprocessing import Preprocessor
 from .monotonic_partition import MonotonicPartitioner
 from .fitting_degree import FittingDegreeComputer
+from .fitting_degree_v2 import FittingDegreeComputerV2
 from .sigma_selection import SigmaSelector
 from .feature_selection import FeatureSelector
 from .monotonic_decision_tree import MonotonicDecisionTree
@@ -20,6 +21,8 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
         max_reducts (int): Maximum feature subsets per sigma. Defaults to 50.
         allow_missing (bool): When False, NaN in features raises during preprocessing
             (contract assertion). When True (default), NaN cells are mean-imputed.
+        fitting_version (int): 1 = paper Algorithm 2 as published; 2 = symmetric
+            directional-inversion variant in fitting_degree_v2. Defaults to 1.
 
     fit(X, y):
         Args:
@@ -39,11 +42,12 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
             proba (np.ndarray): Fused DSL normalized to probabilities of shape (n_samples, n_classes).
     """
 
-    def __init__(self, sigma="auto", delta=0.01, max_reducts=50, allow_missing=True):
+    def __init__(self, sigma="auto", delta=0.01, max_reducts=50, allow_missing=True, fitting_version=1):
         self.sigma = sigma
         self.delta = delta
         self.max_reducts = max_reducts
         self.allow_missing = allow_missing
+        self.fitting_version = fitting_version
         self.trees = None
         self.best_sigma = None
         self.n_sigma_candidates = None
@@ -91,7 +95,8 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
         partitioner.fit(X_clean, y_ordinal)
 
         # Step 4: Fitting Degree Matrix (Algorithm 2)
-        fd = FittingDegreeComputer()
+        FDClass = FittingDegreeComputerV2 if self.fitting_version == 2 else FittingDegreeComputer
+        fd = FDClass()
         fd.fit(X_clean, y_ordinal,
                partitioner.ascending_partitions,
                partitioner.descending_partitions)

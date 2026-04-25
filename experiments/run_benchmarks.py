@@ -93,6 +93,7 @@ def _train_one_fold(X_train, y_train, X_test, y_test, config: BFMDTConfig, allow
     clf = BFMDTClassifier(
         sigma=config.sigma, delta=config.delta, max_reducts=config.max_reducts,
         allow_missing=allow_missing,
+        fitting_version=config.fitting_version,
     )
     clf.fit(X_train, y_train, X_eval=X_test, y_eval=y_test)
     y_pred = clf.predict(X_test)

@@ -134,6 +134,9 @@ class BFMDTConfig:
     report: str = "all"
     dataset_names: list[str] = field(default_factory=lambda: list(ALL_DATASET_NAMES))
 
+    # Algorithm version
+    fitting_version: int = 1
+
 
 def _parse_sigma(value):
     """Parse sigma as 'auto' or a float."""
@@ -236,6 +239,11 @@ def parse_args(argv=None) -> BFMDTConfig:
         "--report", choices=["sigma", "ca-mae", "reducts", "time", "all"], default="all",
         help="Which comparison table(s) to print in 'reporting' mode (default: all)",
     )
+    parser.add_argument(
+        "--fitting-version", type=int, choices=[1, 2], default=1,
+        help="Fitting degree algorithm version: 1 = paper Algorithm 2 as published, "
+             "2 = symmetric directional-inversion variant (default: 1)",
+    )
 
     args = parser.parse_args(argv)
 
@@ -251,4 +259,5 @@ def parse_args(argv=None) -> BFMDTConfig:
         mode=args.mode,
         report=args.report,
         dataset_names=_resolve_dataset_arg(args.datasets),
+        fitting_version=args.fitting_version,
     )
