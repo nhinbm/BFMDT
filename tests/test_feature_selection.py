@@ -104,7 +104,61 @@ def test_max_reducts_limit():
         [0.0, 0.0, 1.0]
     ])
     sigma = 0.5
-    
+
     reducts = selector.find_reducts(fitting_matrix, sigma)
-    
+
     assert len(reducts) == 1, "Only the specified maximum number of reducts should be returned (max_reducts=1)"
+
+
+def test_option_c_tie_break_picks_non_ofs():
+    """When the inner greedy ties between an OFS feature and a non-OFS feature,
+    Option C must pick the non-OFS one to avoid producing a non-minimal reduct.
+
+    Fixture (after binarize at sigma=0.5):
+        Row 0: {a, b}    -> OFS = {a, b} (cols 0, 1)
+        Row 1: {a, c}
+
+    Branch a_k = b (col 1):
+        Delete rows where col 1 = 1 -> row 0 gone, leaving row 1 = {a, c}.
+        Greedy ties: col_sum(a) = col_sum(c) = 1.
+        Without Option C (plain `tied[0]`): pick a -> reduct = {a, b}, which is
+            non-minimal because {a} is already a reduct from the a-seed branch.
+        With Option C: a is in OFS, c is not -> pick c -> reduct = {b, c}, minimal.
+    """
+    matrix = np.array([
+        [0.8, 0.7, 0.2],
+        [0.6, 0.3, 0.9],
+    ])
+
+    reducts = FeatureSelector(max_reducts=50).find_reducts(matrix, 0.5)
+
+    sorted_reducts = {tuple(sorted(r)) for r in reducts}
+    assert sorted_reducts == {(0,), (1, 2)}, (
+        f"Option C should yield {{a}}, {{b, c}}; got {reducts}. A regression "
+        f"that drops the non-OFS preference would yield {{a}}, {{a, b}}."
+    )
+
+
+def test_reducts_cover_constraint_rows(example_2_matrix):
+    """Algorithm 3 invariant: every returned reduct must cover all constraint rows.
+
+    A constraint row is a row of M_sigma that is not trivially all-0 or all-1
+    (those are removed in step 4). For each reduct R, every constraint row must
+    have at least one column in R set to 1 -- otherwise R fails to satisfy the
+    monotonic related family.
+    """
+    sigma = 0.5
+    reducts = FeatureSelector(max_reducts=50).find_reducts(example_2_matrix, sigma)
+    assert len(reducts) > 0
+
+    M_sigma = (example_2_matrix >= sigma).astype(int)
+    n_features = M_sigma.shape[1]
+    row_sums = M_sigma.sum(axis=1)
+    constraint_rows = M_sigma[(row_sums > 0) & (row_sums < n_features)]
+
+    for r in reducts:
+        coverage = constraint_rows[:, r].sum(axis=1)
+        uncovered = np.where(coverage == 0)[0]
+        assert len(uncovered) == 0, (
+            f"Reduct {r} fails to cover constraint rows {uncovered.tolist()}"
+        )
