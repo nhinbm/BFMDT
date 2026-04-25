@@ -94,6 +94,9 @@ def _train_one_fold(X_train, y_train, X_test, y_test, config: BFMDTConfig, allow
         sigma=config.sigma, delta=config.delta, max_reducts=config.max_reducts,
         allow_missing=allow_missing,
         fitting_version=config.fitting_version,
+        min_sigma_candidates=config.min_sigma_candidates,
+        max_sigma_candidates=config.max_sigma_candidates,
+        max_sigma_iterations=config.max_sigma_iterations,
     )
     clf.fit(X_train, y_train, X_eval=X_test, y_eval=y_test)
     y_pred = clf.predict(X_test)

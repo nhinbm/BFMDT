@@ -23,6 +23,9 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
             (contract assertion). When True (default), NaN cells are mean-imputed.
         fitting_version (int): 1 = paper Algorithm 2 as published; 2 = symmetric
             directional-inversion variant in fitting_degree_v2. Defaults to 1.
+        min_sigma_candidates (int): Min sigma candidates passed to SigmaSelector. Defaults to 5.
+        max_sigma_candidates (int): Max sigma candidates passed to SigmaSelector. Defaults to 30.
+        max_sigma_iterations (int): Hard cap on sp adjustment iterations. Defaults to 1000.
 
     fit(X, y):
         Args:
@@ -42,12 +45,25 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
             proba (np.ndarray): Fused DSL normalized to probabilities of shape (n_samples, n_classes).
     """
 
-    def __init__(self, sigma="auto", delta=0.01, max_reducts=50, allow_missing=True, fitting_version=1):
+    def __init__(
+        self,
+        sigma="auto",
+        delta=0.01,
+        max_reducts=50,
+        allow_missing=True,
+        fitting_version=1,
+        min_sigma_candidates=5,
+        max_sigma_candidates=30,
+        max_sigma_iterations=1000,
+    ):
         self.sigma = sigma
         self.delta = delta
         self.max_reducts = max_reducts
         self.allow_missing = allow_missing
         self.fitting_version = fitting_version
+        self.min_sigma_candidates = min_sigma_candidates
+        self.max_sigma_candidates = max_sigma_candidates
+        self.max_sigma_iterations = max_sigma_iterations
         self.trees = None
         self.best_sigma = None
         self.n_sigma_candidates = None
@@ -114,7 +130,11 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
 
         # Step 5: Sigma candidates
         if self.sigma == "auto":
-            sigma_candidates = SigmaSelector().select(self.fitting_matrix)
+            sigma_candidates = SigmaSelector(
+                min_candidates=self.min_sigma_candidates,
+                max_candidates=self.max_sigma_candidates,
+                max_iterations=self.max_sigma_iterations,
+            ).select(self.fitting_matrix)
         else:
             sigma_candidates = [float(self.sigma)]
         self.n_sigma_candidates = len(sigma_candidates)

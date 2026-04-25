@@ -111,6 +111,7 @@ class BFMDTConfig:
         max_reducts (int): Maximum feature subsets per sigma. Defaults to 50.
         min_sigma_candidates (int): Minimum sigma candidates. Defaults to 5.
         max_sigma_candidates (int): Maximum sigma candidates. Defaults to 30.
+        max_sigma_iterations (int): Hard cap on sp adjustment iterations. Defaults to 1000.
         n_folds (int): Number of cross-validation folds. Defaults to 5.
         test_size (float): Test split ratio for large datasets. Defaults to 0.2.
         random_seed (int): Random seed for reproducibility. Defaults to 0.
@@ -125,6 +126,7 @@ class BFMDTConfig:
     # Sigma selection
     min_sigma_candidates: int = 5
     max_sigma_candidates: int = 30
+    max_sigma_iterations: int = 1000
 
     # Experiment settings
     n_folds: int = 5
@@ -219,6 +221,10 @@ def parse_args(argv=None) -> BFMDTConfig:
         help="Max sigma candidates (default: 30)",
     )
     parser.add_argument(
+        "--max-sigma-iterations", type=int, default=1000,
+        help="Hard cap on sp adjustment iterations in sigma selection (default: 1000)",
+    )
+    parser.add_argument(
         "--n-folds", type=int, default=5,
         help="Cross-validation folds (default: 5)",
     )
@@ -253,6 +259,7 @@ def parse_args(argv=None) -> BFMDTConfig:
         max_reducts=args.max_reducts,
         min_sigma_candidates=args.min_sigma_candidates,
         max_sigma_candidates=args.max_sigma_candidates,
+        max_sigma_iterations=args.max_sigma_iterations,
         n_folds=args.n_folds,
         test_size=args.test_size,
         random_seed=args.seed,
