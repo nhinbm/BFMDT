@@ -284,3 +284,90 @@ def test_drop_constant_false_keeps_constant_features():
     pre = Preprocessor(drop_constant=False)
     X_clean, _ = pre.fit_transform(X, y)
     assert X_clean.shape[1] == 3
+
+
+# --- nominal_strategy='drop' ---
+
+
+def test_nominal_drop_removes_pure_categorical_column():
+    """Pure-categorical column should be dropped, numeric column preserved."""
+    X = np.array(
+        [['red', 1.0], ['blue', 2.0], ['green', 3.0], ['red', 4.0]],
+        dtype=object,
+    )
+    y = np.array([0, 1, 2, 0])
+    pre = Preprocessor(nominal_strategy='drop')
+    X_clean, _ = pre.fit_transform(X, y)
+    assert X_clean.shape[1] == 1
+    assert pre.nominal_dropped_cols_ == [0]
+    assert pre.label_mappings_ == {}
+    assert pre.categorical_cols_ == []
+
+
+def test_nominal_drop_removes_mixed_string_majority_column():
+    """Mixed column with string_count > numeric_count should be dropped."""
+    X = np.array(
+        [['1.0', 1.0], ['foo', 2.0], ['bar', 3.0], ['baz', 4.0]],
+        dtype=object,
+    )
+    y = np.array([0, 1, 2, 0])
+    pre = Preprocessor(nominal_strategy='drop')
+    X_clean, _ = pre.fit_transform(X, y)
+    assert X_clean.shape[1] == 1
+    assert pre.nominal_dropped_cols_ == [0]
+
+
+def test_nominal_drop_keeps_mixed_numeric_majority_column():
+    """Mixed column with numeric_count >= string_count should be kept + imputed."""
+    X = np.array(
+        [['1.0'], ['2.0'], ['foo'], ['3.0']],
+        dtype=object,
+    )
+    y = np.array([0, 1, 2, 3])
+    pre = Preprocessor(nominal_strategy='drop')
+    X_clean, _ = pre.fit_transform(X, y)
+    assert X_clean.shape[1] == 1
+    assert pre.nominal_dropped_cols_ == []
+
+
+def test_nominal_drop_raises_when_all_columns_dropped():
+    import pytest
+    X = np.array([['red'], ['blue'], ['green']], dtype=object)
+    y = np.array([0, 1, 2])
+    pre = Preprocessor(nominal_strategy='drop')
+    with pytest.raises(ValueError, match="All features were dropped"):
+        pre.fit_transform(X, y)
+
+
+def test_nominal_drop_transform_reuses_learned_mask():
+    """transform() must drop the same columns identified at fit time."""
+    X_train = np.array(
+        [['red', 1.0], ['blue', 2.0], ['green', 3.0], ['red', 4.0]],
+        dtype=object,
+    )
+    y_train = np.array([0, 1, 2, 0])
+    pre = Preprocessor(nominal_strategy='drop')
+    pre.fit_transform(X_train, y_train)
+
+    X_test = np.array([['yellow', 1.5], ['red', 2.5]], dtype=object)
+    X_test_clean = pre.transform(X_test)
+    assert X_test_clean.shape == (2, 1)
+
+
+def test_nominal_encode_default_unchanged():
+    """Default behavior must remain 'encode' (backward compatibility)."""
+    X = np.array([['red'], ['blue'], ['green'], ['red']], dtype=object)
+    y = np.array([0, 1, 2, 0])
+    pre = Preprocessor()
+    pre.fit_transform(X, y)
+    assert pre.nominal_strategy == 'encode'
+    assert pre.categorical_cols_ == [0]
+    assert 0 in pre.label_mappings_
+    assert pre.nominal_dropped_cols_ == []
+
+
+def test_invalid_nominal_strategy_raises():
+    import pytest
+    pre = Preprocessor(nominal_strategy='onehot')
+    with pytest.raises(ValueError, match="nominal_strategy"):
+        pre.fit(np.random.rand(10, 3), np.random.randint(0, 2, 10))

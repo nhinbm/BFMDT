@@ -9,6 +9,7 @@ from typing import Tuple
 
 from config import (
     DATA_DIR,
+    DATASETS,
     DRIVFACE_DIR,
     DRIVFACE_IMAGE_SIZE,
     NAME_TO_ID,
@@ -19,22 +20,14 @@ from config import (
 )
 
 
-OPENML_DATASETS = {
-    'arcene': 'arcene',
-    'breast-cancer': 'breast-cancer',
-    'breast-wisconsin': 'breast-w',
-    'diabetes': 'diabetes',
-    'divorce': 'divorce_prediction',
-    'german-credit': 'credit-g',
-    'heart-disease': 'heart-statlog',
-    'hepatitis': 'hepatitis',
-    'SMK_CAN_187': 'SMK',
-    'sonar': 'sonar',
-    'turkiye-student': 'turkiye-student-evaluation',
-    'vehicle': 'vehicle',
-    'wdbc': 'wdbc',
-    'wine-quality': 'wine-quality-white',
-}
+def _encode_labels(name, y_raw):
+    """Encode nominal labels using an explicit mapping if defined for the dataset,
+    otherwise fall back to alphabetical LabelEncoder."""
+    mapping = DATASETS[name].label_mapping if name in DATASETS else None
+    if mapping is not None:
+        y_str = pd.Series(y_raw).astype(str)
+        return y_str.map(mapping).to_numpy(dtype=np.int64)
+    return LabelEncoder().fit_transform(y_raw)
 
 
 class DatasetRegistry:
@@ -114,13 +107,13 @@ def fetch_or_load_local(name, openml_name=None, data_dir=DATA_DIR) -> Tuple[np.n
             X = df.iloc[:, :-1].values
             y_raw = df.iloc[:, -1].values
 
-    if name in {'breast-wisconsin', 'breast-cancer', 'hepatitis'}:
+    if name in DATASETS and DATASETS[name].allow_missing_values:
         X_df = pd.DataFrame(X)
         y_s = pd.Series(y_raw)
         mask = ~(X_df.isin(['?']).any(axis=1) | X_df.isna().any(axis=1) | y_s.isna())
         X, y_raw = X_df[mask].values, y_s[mask].values
 
-    y = LabelEncoder().fit_transform(y_raw)
+    y = _encode_labels(name, y_raw)
     return X, y
 
 
@@ -297,7 +290,7 @@ def load_dataset(name, data_dir=DATA_DIR):
     """
     Load a dataset by name.
     Custom-loaded datasets are dispatched via DatasetRegistry.
-    OpenML-backed datasets are dispatched via OPENML_DATASETS (no registration needed).
+    OpenML-backed datasets are dispatched via DATASETS[name].openml_name.
 
     Args:
         name (str): Unique name of the dataset to load.
@@ -309,10 +302,11 @@ def load_dataset(name, data_dir=DATA_DIR):
     """
     if DatasetRegistry.has(name):
         return DatasetRegistry.get_loader(name)()
-    if name in OPENML_DATASETS:
-        return fetch_or_load_local(name, OPENML_DATASETS[name], data_dir=data_dir)
-    raise KeyError(f"Dataset '{name}' is not registered and not in OPENML_DATASETS.")
+    if name in DATASETS and DATASETS[name].openml_name is not None:
+        return fetch_or_load_local(name, DATASETS[name].openml_name, data_dir=data_dir)
+    raise KeyError(f"Dataset '{name}' is not registered and has no OpenML mapping in DATASETS.")
 
 
 def list_available_datasets():
-    return list(OPENML_DATASETS.keys()) + DatasetRegistry.list_datasets()
+    openml_names = [n for n, m in DATASETS.items() if m.openml_name is not None]
+    return openml_names + DatasetRegistry.list_datasets()

@@ -21,7 +21,7 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
-from config import BFMDTConfig, REPORTS_DIR, parse_args
+from config import BFMDTConfig, DATASETS, REPORTS_DIR, parse_args
 from datasets.loader import load_dataset
 from bfmdt import BFMDTClassifier
 from bfmdt.metrics import Evaluator
@@ -83,7 +83,7 @@ def _choose_splitter(name, config: BFMDTConfig):
     return splitter, f"{config.n_folds}-fold stratified CV", config.n_folds
 
 
-def _train_one_fold(X_train, y_train, X_test, y_test, config: BFMDTConfig) -> FoldResult:
+def _train_one_fold(X_train, y_train, X_test, y_test, config: BFMDTConfig, allow_missing=False) -> FoldResult:
     """Fit classifier on train split and evaluate on test split.
 
     Passes (X_test, y_test) as eval to the classifier so σ is selected by
@@ -91,7 +91,8 @@ def _train_one_fold(X_train, y_train, X_test, y_test, config: BFMDTConfig) -> Fo
     computes accuracy on the prediction set X when choosing σ_best.
     """
     clf = BFMDTClassifier(
-        sigma=config.sigma, delta=config.delta, max_reducts=config.max_reducts
+        sigma=config.sigma, delta=config.delta, max_reducts=config.max_reducts,
+        allow_missing=allow_missing,
     )
     clf.fit(X_train, y_train, X_eval=X_test, y_eval=y_test)
     y_pred = clf.predict(X_test)
@@ -133,11 +134,13 @@ def run_dataset(name, config: BFMDTConfig) -> DatasetResult:
     splitter, protocol, n_iters = _choose_splitter(name, config)
     print(f"  Protocol: {protocol}")
 
+    allow_missing = DATASETS[name].allow_missing_values if name in DATASETS else False
+
     folds = []
     start = time.time()
     for iter_idx, (train_idx, test_idx) in enumerate(splitter.split(X, y), 1):
         fold = _train_one_fold(
-            X[train_idx], y[train_idx], X[test_idx], y[test_idx], config
+            X[train_idx], y[train_idx], X[test_idx], y[test_idx], config, allow_missing
         )
         folds.append(fold)
         label = "Holdout" if n_iters == 1 else f"Fold {iter_idx}/{n_iters}"
@@ -151,7 +154,7 @@ def run_dataset(name, config: BFMDTConfig) -> DatasetResult:
         )
         tr_idx, te_idx = next(extra_splitter.split(X, y))
         holdout_fold = _train_one_fold(
-            X[tr_idx], y[tr_idx], X[te_idx], y[te_idx], config
+            X[tr_idx], y[tr_idx], X[te_idx], y[te_idx], config, allow_missing
         )
         print(f"  Holdout: CA={holdout_fold.ca:.4f}, MAE={holdout_fold.mae:.4f}")
 

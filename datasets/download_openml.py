@@ -18,8 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sklearn.datasets import fetch_openml
 
-from config import DATA_DIR, DATASET_NAMES_BY_ID, OPENML_CACHE_DIR
-from datasets.loader import OPENML_DATASETS
+from config import DATA_DIR, DATASET_NAMES_BY_ID, DATASETS, OPENML_CACHE_DIR
 
 
 def main():
@@ -41,12 +40,12 @@ def main():
             f"--data-id must be one of {sorted(DATASET_NAMES_BY_ID)}"
         )
     project_name = DATASET_NAMES_BY_ID[args.data_id]
-    if project_name not in OPENML_DATASETS:
+    openml_name = DATASETS[project_name].openml_name if project_name in DATASETS else None
+    if openml_name is None:
         parser.error(
             f"id={args.data_id} ('{project_name}') is not on OpenML; "
             f"use the dedicated downloader for that dataset."
         )
-    openml_name = OPENML_DATASETS[project_name]
     csv_path = os.path.join(DATA_DIR, f"{args.data_id:02d}_{project_name}.csv")
 
     os.makedirs(DATA_DIR, exist_ok=True)

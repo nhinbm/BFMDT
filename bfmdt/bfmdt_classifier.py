@@ -18,6 +18,8 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
         sigma (float | str): Fitting degree threshold, or 'auto' for automatic selection. Defaults to 'auto'.
         delta (float): RMI threshold for tree splitting. Defaults to 0.01.
         max_reducts (int): Maximum feature subsets per sigma. Defaults to 50.
+        allow_missing (bool): When False, NaN in features raises during preprocessing
+            (contract assertion). When True (default), NaN cells are mean-imputed.
 
     fit(X, y):
         Args:
@@ -37,10 +39,11 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
             proba (np.ndarray): Fused DSL normalized to probabilities of shape (n_samples, n_classes).
     """
 
-    def __init__(self, sigma="auto", delta=0.01, max_reducts=50):
+    def __init__(self, sigma="auto", delta=0.01, max_reducts=50, allow_missing=True):
         self.sigma = sigma
         self.delta = delta
         self.max_reducts = max_reducts
+        self.allow_missing = allow_missing
         self.trees = None
         self.best_sigma = None
         self.n_sigma_candidates = None
@@ -74,7 +77,7 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
             self: The fitted classifier.
         """
         # Step 1: Preprocess
-        self.preprocessor = Preprocessor()
+        self.preprocessor = Preprocessor(allow_missing=self.allow_missing)
         X_clean, y_clean = self.preprocessor.fit_transform(X, y)
 
         # Step 2: Map classes to ordinal integers

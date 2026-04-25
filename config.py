@@ -58,6 +58,49 @@ ALL_DATASET_NAMES = list(DATASET_NAMES_BY_ID.values())
 NAME_TO_ID = {v: k for k, v in DATASET_NAMES_BY_ID.items()}
 
 
+# ---------------------------------------------------------------------------
+# Per-dataset metadata.
+#   openml_name:          OpenML name; None for custom-loaded (DatasetRegistry).
+#   label_mapping:        explicit nominal-label encoding; None -> alphabetical
+#                         LabelEncoder.
+#   allow_missing_values: contract for preprocessing. True  -> NaN is allowed
+#                         and imputed by column mean. False -> NaN raises
+#                         ValueError (assert clean).
+# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class DatasetMeta:
+    openml_name: str | None = None
+    label_mapping: dict | None = None
+    allow_missing_values: bool = False
+
+
+DATASETS = {
+    'breast-wisconsin': DatasetMeta(
+        openml_name='breast-w',
+        label_mapping={'benign': 0, 'malignant': 1},
+        allow_missing_values=True,
+    ),
+    'arcene':          DatasetMeta(openml_name='arcene'),
+    'breast-cancer':   DatasetMeta(openml_name='breast-cancer'),
+    'diabetes':        DatasetMeta(openml_name='diabetes'),
+    'divorce':         DatasetMeta(openml_name='divorce_prediction'),
+    'german-credit':   DatasetMeta(openml_name='credit-g'),
+    'heart-disease':   DatasetMeta(openml_name='heart-statlog'),
+    'hepatitis':       DatasetMeta(openml_name='hepatitis'),
+    'SMK_CAN_187':     DatasetMeta(openml_name='SMK'),
+    'sonar':           DatasetMeta(openml_name='sonar'),
+    'turkiye-student': DatasetMeta(openml_name='turkiye-student-evaluation'),
+    'vehicle':         DatasetMeta(openml_name='vehicle'),
+    'wdbc':            DatasetMeta(openml_name='wdbc'),
+    'wine-quality':    DatasetMeta(openml_name='wine-quality-white'),
+    # Custom-loaded (handled by DatasetRegistry in datasets/loader.py)
+    'wine':            DatasetMeta(),
+    'Yale':            DatasetMeta(),
+    'DrivFace':        DatasetMeta(),
+    'PEMS-SF':         DatasetMeta(),
+}
+
+
 @dataclass
 class BFMDTConfig:
     """Centralized configuration for the BFMDT pipeline.
