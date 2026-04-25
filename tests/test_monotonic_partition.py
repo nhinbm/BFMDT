@@ -4,87 +4,152 @@ import numpy as np
 from bfmdt.monotonic_partition import MonotonicPartitioner
 
 
-@pytest.fixture
-def partitioned():
-    """X=[3,1,4,2], y=[2,1,4,3] -- unsorted, has breaks in both directions."""
-    X = np.array([[3.0], [1.0], [4.0], [2.0]])
-    y = np.array([2, 1, 4, 3])
-    return MonotonicPartitioner().fit(X, y)
+# --- canonical AMP cases (DMP is symmetric, see test_dmp_is_amp_on_flipped_decision) ---
 
 
-# --- ascending: sort X asc -> y=[1,3,2,4], break at 3>2 -> AMMIs: [1,3], [0,2] ---
+def test_perfect_monotonic_yields_single_granule():
+    """y already monotonic w.r.t. X -> AMP collapses to one MMI covering U."""
+    mp = MonotonicPartitioner().fit(
+        np.array([[1.0], [2.0], [3.0], [4.0]]),
+        np.array([1, 2, 3, 4]),
+    )
+    amp = mp.ascending_partitions[0]
+    assert len(amp) == 1
+    np.testing.assert_array_equal(amp[0], [0, 1, 2, 3])
 
 
-def test_ascending_mmi_count(partitioned):
-    assert len(partitioned.ascending_partitions[0]) == 2
+def test_constant_decision_yields_single_granule():
+    """Constant y is non-decreasing AND non-increasing -> AMP and DMP both have one MMI."""
+    mp = MonotonicPartitioner().fit(
+        np.array([[1.0], [2.0], [3.0], [4.0]]),
+        np.array([2, 2, 2, 2]),
+    )
+    assert len(mp.ascending_partitions[0]) == 1
+    assert len(mp.descending_partitions[0]) == 1
 
 
-def test_ascending_first_mmi(partitioned):
-    np.testing.assert_array_equal(partitioned.ascending_partitions[0][0], [1, 3])
+def test_strictly_decreasing_decision_yields_singletons():
+    """Every adjacent pair breaks ascending monotonicity -> n MMIs of size 1."""
+    mp = MonotonicPartitioner().fit(
+        np.array([[1.0], [2.0], [3.0], [4.0]]),
+        np.array([4, 3, 2, 1]),
+    )
+    amp = mp.ascending_partitions[0]
+    assert len(amp) == 4
+    for i, mmi in enumerate(amp):
+        np.testing.assert_array_equal(mmi, [i])
 
 
-def test_ascending_second_mmi(partitioned):
-    np.testing.assert_array_equal(partitioned.ascending_partitions[0][1], [0, 2])
+def test_single_break_yields_two_granules():
+    """One up-run followed by another -> two MMIs split at the downward step."""
+    mp = MonotonicPartitioner().fit(
+        np.array([[1.0], [2.0], [3.0], [4.0], [5.0]]),
+        np.array([1, 2, 3, 1, 2]),
+    )
+    amp = mp.ascending_partitions[0]
+    assert len(amp) == 2
+    np.testing.assert_array_equal(amp[0], [0, 1, 2])
+    np.testing.assert_array_equal(amp[1], [3, 4])
 
 
-# --- descending: sort X asc -> y=[1,3,2,4], breaks at 1<3 and 2<4 ---
+def test_multiple_breaks_yield_multiple_granules():
+    """Repeated zig-zag in y produces one MMI per up-run."""
+    mp = MonotonicPartitioner().fit(
+        np.array([[1.0], [2.0], [3.0], [4.0], [5.0], [6.0]]),
+        np.array([1, 2, 1, 2, 1, 2]),
+    )
+    amp = mp.ascending_partitions[0]
+    assert len(amp) == 3
+    np.testing.assert_array_equal(amp[0], [0, 1])
+    np.testing.assert_array_equal(amp[1], [2, 3])
+    np.testing.assert_array_equal(amp[2], [4, 5])
 
 
-def test_descending_mmi_count(partitioned):
-    assert len(partitioned.descending_partitions[0]) == 3
+# --- canonical DMP cases (constant-decision case is covered above) ---
 
 
-def test_descending_first_mmi(partitioned):
-    np.testing.assert_array_equal(partitioned.descending_partitions[0][0], [1])
+def test_perfect_anti_monotonic_yields_single_granule_dmp():
+    """y non-increasing w.r.t. X -> DMP collapses to one DMMI covering U."""
+    mp = MonotonicPartitioner().fit(
+        np.array([[1.0], [2.0], [3.0], [4.0]]),
+        np.array([4, 3, 2, 1]),
+    )
+    dmp = mp.descending_partitions[0]
+    assert len(dmp) == 1
+    np.testing.assert_array_equal(dmp[0], [0, 1, 2, 3])
 
 
-def test_descending_second_mmi(partitioned):
-    np.testing.assert_array_equal(partitioned.descending_partitions[0][1], [3, 0])
+def test_strictly_increasing_decision_yields_singletons_dmp():
+    """Every adjacent pair breaks descending monotonicity -> n DMMIs of size 1."""
+    mp = MonotonicPartitioner().fit(
+        np.array([[1.0], [2.0], [3.0], [4.0]]),
+        np.array([1, 2, 3, 4]),
+    )
+    dmp = mp.descending_partitions[0]
+    assert len(dmp) == 4
+    for i, mmi in enumerate(dmp):
+        np.testing.assert_array_equal(mmi, [i])
 
 
-def test_descending_third_mmi(partitioned):
-    np.testing.assert_array_equal(partitioned.descending_partitions[0][2], [2])
+def test_single_break_yields_two_granules_dmp():
+    """One down-run followed by another -> two DMMIs split at the upward step."""
+    mp = MonotonicPartitioner().fit(
+        np.array([[1.0], [2.0], [3.0], [4.0], [5.0]]),
+        np.array([5, 4, 3, 5, 4]),
+    )
+    dmp = mp.descending_partitions[0]
+    assert len(dmp) == 2
+    np.testing.assert_array_equal(dmp[0], [0, 1, 2])
+    np.testing.assert_array_equal(dmp[1], [3, 4])
+
+
+def test_multiple_breaks_yield_multiple_granules_dmp():
+    """Repeated zig-zag in y produces one DMMI per down-run."""
+    mp = MonotonicPartitioner().fit(
+        np.array([[1.0], [2.0], [3.0], [4.0], [5.0], [6.0]]),
+        np.array([2, 1, 2, 1, 2, 1]),
+    )
+    dmp = mp.descending_partitions[0]
+    assert len(dmp) == 3
+    np.testing.assert_array_equal(dmp[0], [0, 1])
+    np.testing.assert_array_equal(dmp[1], [2, 3])
+    np.testing.assert_array_equal(dmp[2], [4, 5])
+
+
+# --- Algorithm 1 step 4: tie-break by ascending decision within feature ties ---
+
+
+def test_tied_feature_sorted_by_decision_ascending():
+    """Same-feature samples reordered by y asc -> y_sorted becomes monotonic, one MMI."""
+    mp = MonotonicPartitioner().fit(
+        np.array([[1.0], [1.0], [2.0]]),
+        np.array([2, 1, 3]),
+    )
+    amp = mp.ascending_partitions[0]
+    assert len(amp) == 1
+    np.testing.assert_array_equal(amp[0], [1, 0, 2])
+
+
+def test_tied_feature_with_decreasing_decision_breaks():
+    """Tie-break by y asc still leaves a downward step at the feature boundary -> split there."""
+    mp = MonotonicPartitioner().fit(
+        np.array([[1.0], [1.0], [2.0]]),
+        np.array([3, 1, 2]),
+    )
+    amp = mp.ascending_partitions[0]
+    assert len(amp) == 2
+    np.testing.assert_array_equal(amp[0], [1, 0])
+    np.testing.assert_array_equal(amp[1], [2])
 
 
 # --- edge cases ---
 
 
-def test_single_sample():
-    mp = MonotonicPartitioner().fit(np.array([[5.0]]), np.array([1]))
-    assert len(mp.ascending_partitions[0]) == 1
-
-
-def test_tied_features_one_mmi_ascending():
-    """Def. 7 cond. 2: samples sharing a feature value must be in one MMI."""
-    mp = MonotonicPartitioner().fit(np.array([[1.0], [1.0], [1.0]]), np.array([3, 1, 2]))
-    assert len(mp.ascending_partitions[0]) == 1
-
-
-def test_tied_features_one_mmi_descending():
-    """Def. 7 cond. 2: same-feature samples must share one DMMI even when decisions differ."""
-    mp = MonotonicPartitioner().fit(np.array([[1.0], [1.0], [1.0]]), np.array([3, 1, 2]))
-    assert len(mp.descending_partitions[0]) == 1
-
-
-def test_multiple_features():
-    """Partitions computed independently per feature."""
-    X = np.array([[1.0, 3.0], [2.0, 2.0], [3.0, 1.0]])
-    mp = MonotonicPartitioner().fit(X, np.array([1, 2, 3]))
-    assert len(mp.ascending_partitions) == 2
-
-
-def test_original_indices_preserved():
-    """MMIs contain original sample indices, not sorted positions."""
-    mp = MonotonicPartitioner().fit(np.array([[3.0], [1.0], [2.0]]), np.array([3, 1, 2]))
-    np.testing.assert_array_equal(mp.ascending_partitions[0][0], [1, 2, 0])
-
-
-def test_fit_returns_self():
-    mp = MonotonicPartitioner()
-    assert mp.fit(np.array([[1.0], [2.0]]), np.array([1, 2])) is mp
-
-
-# --- Def. 7 cond. 2 (convexity) regression tests ---
+def test_single_sample_yields_single_granule():
+    mp = MonotonicPartitioner().fit(np.array([[5.0]]), np.array([3]))
+    amp = mp.ascending_partitions[0]
+    assert len(amp) == 1
+    np.testing.assert_array_equal(amp[0], [0])
 
 
 def test_empty_input_raises():
@@ -93,76 +158,65 @@ def test_empty_input_raises():
         MonotonicPartitioner().fit(np.zeros((0, 1)), np.array([], dtype=int))
 
 
-def test_descending_tied_features_grouped_with_mixed_features():
-    """Original C1 failing case: ties at feature 0.1 must not be split across MMIs in DMP."""
-    X = np.array([[0.1], [0.1], [0.2]])
-    y = np.array([1, 2, 2])
-    mp = MonotonicPartitioner().fit(X, y)
-    dmp = mp.descending_partitions[0]
-
-    # Indices 0 and 1 share feature value 0.1 -> Def. 7 cond. 2 forces them together.
-    mmi_of = {idx: i for i, mmi in enumerate(dmp) for idx in mmi.tolist()}
-    assert mmi_of[0] == mmi_of[1], "samples 0 and 1 share feature 0.1 -> same DMMI required"
+def test_original_indices_preserved():
+    """MMIs contain original sample indices, not sorted positions."""
+    mp = MonotonicPartitioner().fit(
+        np.array([[3.0], [1.0], [2.0]]),
+        np.array([3, 1, 2]),
+    )
+    np.testing.assert_array_equal(mp.ascending_partitions[0][0], [1, 2, 0])
 
 
-def test_def7_cond2_invariant_no_overlapping_ranges_descending():
-    """For DMP, no two MMIs may share any feature value (overlapping inf/sup ranges)."""
-    X = np.array([[0.1], [0.1], [0.2], [0.2], [0.3]])
-    y = np.array([1, 2, 1, 3, 2])
-    mp = MonotonicPartitioner().fit(X, y)
-
-    for direction_partitions in (mp.ascending_partitions[0], mp.descending_partitions[0]):
-        ranges = [(X[mmi, 0].min(), X[mmi, 0].max()) for mmi in direction_partitions]
-        for i, (lo_i, hi_i) in enumerate(ranges):
-            for j, (lo_j, hi_j) in enumerate(ranges):
-                if i == j:
-                    continue
-                assert hi_i < lo_j or hi_j < lo_i, (
-                    f"MMIs {i} (range [{lo_i},{hi_i}]) and {j} (range [{lo_j},{hi_j}]) "
-                    "overlap -- violates Def. 7 cond. 2"
-                )
+def test_fit_returns_self():
+    mp = MonotonicPartitioner()
+    assert mp.fit(np.array([[1.0], [2.0]]), np.array([1, 2])) is mp
 
 
-def test_def7_cond2_random_invariant():
-    """Randomized: every sample's feature value must lie in exactly its own MMI's range."""
+# --- structural invariants (Def. 9 + Def. 7 cond. 2) ---
+
+
+def test_partition_covers_U_and_pairwise_disjoint():
+    """Def. 9: MMIs of one feature partition U exactly (∪Gt = U, Gt ∩ Gu = ∅)."""
     rng = np.random.default_rng(0)
-    for _ in range(20):
-        n = rng.integers(2, 30)
-        X = rng.choice([0.0, 0.25, 0.5, 0.75, 1.0], size=(n, 1))
-        y = rng.integers(1, 5, size=n)
-        mp = MonotonicPartitioner().fit(X, y)
-
-        for partitions in (mp.ascending_partitions[0], mp.descending_partitions[0]):
-            covered = np.concatenate(partitions)
-            assert sorted(covered.tolist()) == list(range(n)), "coverage broken"
-
-            for mmi in partitions:
-                lo, hi = X[mmi, 0].min(), X[mmi, 0].max()
-                in_range = np.where((X[:, 0] >= lo) & (X[:, 0] <= hi))[0]
-                assert set(in_range.tolist()) <= set(mmi.tolist()), (
-                    f"Def. 7 cond. 2 violated: samples {set(in_range.tolist()) - set(mmi.tolist())} "
-                    f"have feature in [{lo},{hi}] but are not in this MMI"
-                )
-
-
-def test_paper_table1_feature_d_partition_is_valid():
-    """Paper Table 1 feature d: implementation should produce a partition that
-    respects Def. 7 cond. 2, even though it may not match the paper's narrative
-    Example 1 grouping (the paper's example is internally inconsistent)."""
-    X = np.array([[0.2], [0.0], [0.5], [0.5], [0.7], [0.0], [0.8], [0.2], [0.7]])
-    y = np.array([1, 1, 1, 2, 2, 2, 3, 3, 3])
+    n = 30
+    X = rng.choice([0.0, 0.25, 0.5, 0.75, 1.0], size=(n, 2))
+    y = rng.integers(1, 5, size=n)
     mp = MonotonicPartitioner().fit(X, y)
 
-    amp = mp.ascending_partitions[0]
-    covered = sorted(np.concatenate(amp).tolist())
-    assert covered == list(range(9)), "AMP must cover all 9 samples exactly once"
+    for j in range(X.shape[1]):
+        for partitions in (mp.ascending_partitions[j], mp.descending_partitions[j]):
+            covered = np.concatenate(partitions).tolist()
+            assert sorted(covered) == list(range(n)), "coverage broken"
+            assert len(set(covered)) == n, "MMIs are not pairwise disjoint"
 
-    # samples 1 and 5 both have d=0.0 -> must share an MMI (Def. 7 cond. 2)
-    mmi_of = {idx: i for i, mmi in enumerate(amp) for idx in mmi.tolist()}
-    assert mmi_of[1] == mmi_of[5]
-    # samples 0 and 7 both have d=0.2 -> must share an MMI
-    assert mmi_of[0] == mmi_of[7]
-    # samples 2 and 3 both have d=0.5 -> must share an MMI
-    assert mmi_of[2] == mmi_of[3]
-    # samples 4 and 8 both have d=0.7 -> must share an MMI
-    assert mmi_of[4] == mmi_of[8]
+
+def test_same_feature_value_implies_same_mmi():
+    """Def. 7 cond. 2 (convexity): samples sharing a feature value cannot be split across MMIs."""
+    rng = np.random.default_rng(1)
+    n = 25
+    X = rng.choice([0.1, 0.2, 0.3, 0.4], size=(n, 1))
+    y = rng.integers(1, 5, size=n)
+    mp = MonotonicPartitioner().fit(X, y)
+
+    for partitions in (mp.ascending_partitions[0], mp.descending_partitions[0]):
+        mmi_of = {idx: i for i, mmi in enumerate(partitions) for idx in mmi.tolist()}
+        for v in np.unique(X[:, 0]):
+            indices_with_v = np.where(X[:, 0] == v)[0]
+            mmi_ids = {mmi_of[i] for i in indices_with_v}
+            assert len(mmi_ids) == 1, f"feature value {v} split across MMIs {mmi_ids}"
+
+
+# --- AMP / DMP symmetry ---
+
+
+def test_dmp_is_amp_on_flipped_decision():
+    """DMP(X, y) == AMP(X, M - y): flipping y turns descending runs into ascending ones."""
+    X = np.array([[1.0], [2.0], [3.0], [4.0], [5.0]])
+    y = np.array([1, 3, 2, 4, 1])
+
+    dmp = MonotonicPartitioner().fit(X, y).descending_partitions[0]
+    amp = MonotonicPartitioner().fit(X, y.max() - y).ascending_partitions[0]
+
+    assert len(dmp) == len(amp)
+    for d, a in zip(dmp, amp):
+        np.testing.assert_array_equal(d, a)
