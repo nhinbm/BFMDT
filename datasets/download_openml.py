@@ -5,9 +5,9 @@ The loader's local fallback at `datasets.loader.fetch_or_load_local` reads
 this CSV when OpenML is unreachable.
 
 Usage:
-    python experiments/download_openml.py                  # default: id=1 (breast-wisconsin)
-    python experiments/download_openml.py --data-id 2      # fetch id=2 (wine)
-    python experiments/download_openml.py --data-id 1 --force
+    python datasets/download_openml.py                  # default: id=1 (breast-wisconsin)
+    python datasets/download_openml.py --data-id 2      # fetch id=2 (wine)
+    python datasets/download_openml.py --data-id 1 --force
 """
 
 import argparse
