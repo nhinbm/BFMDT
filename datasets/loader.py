@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from PIL import Image
 from scipy.io import loadmat
-from sklearn.datasets import load_wine, fetch_openml
+from sklearn.datasets import fetch_openml
 from sklearn.preprocessing import LabelEncoder
 from typing import Tuple
 
@@ -269,10 +269,47 @@ def load_pems_sf_data(data_dir=PEMS_SF_DIR):
     y = LabelEncoder().fit_transform(y_raw)
     return X, y
 
-@DatasetRegistry.register('wine')
-def _load_wine():
-    data = load_wine()
-    return data.data, data.target
+@DatasetRegistry.register('breast-cancer')
+def _load_breast_cancer():
+    from datasets.loader_breast_cancer import load_breast_cancer_data
+    return load_breast_cancer_data()
+
+
+@DatasetRegistry.register('heart-disease')
+def _load_heart_disease():
+    from datasets.loader_heart_disease import load_heart_disease_data
+    return load_heart_disease_data()
+
+
+@DatasetRegistry.register('hepatitis')
+def _load_hepatitis():
+    from datasets.loader_hepatitis import load_hepatitis_data
+    return load_hepatitis_data()
+
+
+@DatasetRegistry.register('german-credit')
+def _load_german_credit():
+    from datasets.loader_german_credit import load_german_credit_data
+    return load_german_credit_data()
+
+
+@DatasetRegistry.register('vehicle')
+def _load_vehicle():
+    from datasets.loader_vehicle import load_vehicle_data
+    return load_vehicle_data()
+
+
+@DatasetRegistry.register('diabetes')
+def _load_diabetes():
+    from datasets.loader_diabetes import load_diabetes_data
+    return load_diabetes_data()
+
+
+@DatasetRegistry.register('turkiye-student')
+def _load_turkiye_student():
+    from datasets.loader_turkiye_student import load_turkiye_student_data
+    return load_turkiye_student_data()
+
 
 @DatasetRegistry.register('DrivFace')
 def _load_drivface():
@@ -289,12 +326,14 @@ def _load_pems_sf():
 def load_dataset(name, data_dir=DATA_DIR):
     """
     Load a dataset by name.
-    Custom-loaded datasets are dispatched via DatasetRegistry.
-    OpenML-backed datasets are dispatched via DATASETS[name].openml_name.
+    Custom-loaded datasets (image / .mat / raw text) are dispatched via
+    DatasetRegistry. Everything else goes through fetch_or_load_local, which
+    pulls from OpenML when openml_name is set, or falls back to the local
+    {id:02d}_{name}.csv when it isn't.
 
     Args:
         name (str): Unique name of the dataset to load.
-        data_dir (str): Directory to look for local CSV files if OpenML loading fails.
+        data_dir (str): Directory to look for local CSV files.
 
     Returns:
         X (np.ndarray): Feature matrix of shape (n_samples, n_features).
@@ -302,11 +341,10 @@ def load_dataset(name, data_dir=DATA_DIR):
     """
     if DatasetRegistry.has(name):
         return DatasetRegistry.get_loader(name)()
-    if name in DATASETS and DATASETS[name].openml_name is not None:
+    if name in DATASETS:
         return fetch_or_load_local(name, DATASETS[name].openml_name, data_dir=data_dir)
-    raise KeyError(f"Dataset '{name}' is not registered and has no OpenML mapping in DATASETS.")
+    raise KeyError(f"Dataset '{name}' is not registered and not in DATASETS.")
 
 
 def list_available_datasets():
-    openml_names = [n for n, m in DATASETS.items() if m.openml_name is not None]
-    return openml_names + DatasetRegistry.list_datasets()
+    return list(DATASETS.keys())

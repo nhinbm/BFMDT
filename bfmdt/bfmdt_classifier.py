@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.model_selection import ShuffleSplit, StratifiedShuffleSplit
 
 from .preprocessing import Preprocessor
 from .monotonic_partition import MonotonicPartitioner
@@ -8,6 +9,7 @@ from .fitting_degree_v2 import FittingDegreeComputerV2
 from .sigma_selection import SigmaSelector
 from .feature_selection import FeatureSelector
 from .monotonic_decision_tree import MonotonicDecisionTree
+from .monotonic_decision_tree_v2 import MonotonicDecisionTreeV2
 from .metrics import Evaluator
 from .utils import map_classes_to_ordinal
 
@@ -23,6 +25,8 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
             (contract assertion). When True (default), NaN cells are mean-imputed.
         fitting_version (int): 1 = paper Algorithm 2 as published; 2 = symmetric
             directional-inversion variant in fitting_degree_v2. Defaults to 1.
+        tree_version (int): 1 = matches paper Fig 3 / current tests; 2 = strict
+            paper Eq 13/14/16 with midpoint splits. Defaults to 1.
         min_sigma_candidates (int): Min sigma candidates passed to SigmaSelector. Defaults to 5.
         max_sigma_candidates (int): Max sigma candidates passed to SigmaSelector. Defaults to 30.
         max_sigma_iterations (int): Hard cap on sp adjustment iterations. Defaults to 1000.
@@ -52,6 +56,7 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
         max_reducts=50,
         allow_missing=True,
         fitting_version=1,
+        tree_version=1,
         min_sigma_candidates=5,
         max_sigma_candidates=30,
         max_sigma_iterations=1000,
@@ -61,6 +66,7 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
         self.max_reducts = max_reducts
         self.allow_missing = allow_missing
         self.fitting_version = fitting_version
+        self.tree_version = tree_version
         self.min_sigma_candidates = min_sigma_candidates
         self.max_sigma_candidates = max_sigma_candidates
         self.max_sigma_iterations = max_sigma_iterations
@@ -86,12 +92,9 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
             y_eval (np.ndarray | None): Optional held-out labels for σ selection.
 
         Note:
-            Paper Algorithm 4 selects σ_best by accuracy on the prediction set X
-            (i.e. the test/eval set), not on the training set. When X_eval/y_eval
-            are passed, this implementation follows the paper: σ is tuned on the
-            eval set. This is hyperparameter tuning on held-out data, so reported
-            metrics on the same eval set are optimistically biased. When eval is
-            not passed, σ falls back to training-accuracy selection (sklearn-style).
+            σ scored on (X_eval, y_eval) if given (paper protocol — pass the
+            test fold to reproduce Algorithm 4 line 12), else on an internal
+            stratified 80/20 holdout with final trees rebuilt on full train.
 
         Returns:
             self: The fitted classifier.
@@ -120,13 +123,35 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
         self.monotone_directions = fd.monotone_directions
         X_adjusted = fd.X_adjusted
 
-        eval_X_adj, eval_y_ord = None, None
+        # Step 4b: σ scoring set. σ MUST be tuned on a held-out fold; tuning
+        # on training accuracy biases σ toward overfit trees. Caller-supplied
+        # eval is honoured; otherwise carve a stratified 80/20 holdout.
         if X_eval is not None and y_eval is not None:
             X_eval_clean = self.preprocessor.transform(X_eval)
             eval_X_adj = X_eval_clean.copy()
             desc_mask = self.monotone_directions == -1
             eval_X_adj[:, desc_mask] = 1.0 - eval_X_adj[:, desc_mask]
             eval_y_ord = np.array([self.label_map_[yi] for yi in y_eval])
+
+            inner_train_X, inner_train_y = X_adjusted, y_ordinal
+            inner_val_X, inner_val_y = eval_X_adj, eval_y_ord
+            using_internal_split = False
+        else:
+            try:
+                splitter = StratifiedShuffleSplit(
+                    n_splits=1, test_size=0.2, random_state=0
+                )
+                train_idx, val_idx = next(splitter.split(X_adjusted, y_ordinal))
+            except ValueError:
+                splitter = ShuffleSplit(
+                    n_splits=1, test_size=0.2, random_state=0
+                )
+                train_idx, val_idx = next(splitter.split(X_adjusted, y_ordinal))
+            inner_train_X = X_adjusted[train_idx]
+            inner_train_y = y_ordinal[train_idx]
+            inner_val_X = X_adjusted[val_idx]
+            inner_val_y = y_ordinal[val_idx]
+            using_internal_split = True
 
         # Step 5: Sigma candidates
         if self.sigma == "auto":
@@ -139,11 +164,12 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
             sigma_candidates = [float(self.sigma)]
         self.n_sigma_candidates = len(sigma_candidates)
 
-        # Steps 6-8: For each sigma, build trees and select best
+        # Steps 6-8: For each σ, build trees on inner_train, score on inner_val.
+        TreeClass = MonotonicDecisionTreeV2 if self.tree_version == 2 else MonotonicDecisionTree
         best_accuracy = -1.0
-        best_trees = []
+        best_inner_trees = []
         best_sigma = None
-        best_n_reducts = 0
+        best_reducts = None
         fs = FeatureSelector(max_reducts=self.max_reducts)
 
         for sigma_val in sigma_candidates:
@@ -151,37 +177,52 @@ class BFMDTClassifier(ClassifierMixin, BaseEstimator):
             if not reducts:
                 continue
 
-            # Step 6: Build ARMI + DRMI trees per reduct
-            trees = []
+            # Step 6: Build ARMI + DRMI trees per reduct on inner_train.
+            inner_trees = []
             for reduct in reducts:
                 for direction in ["ascending", "descending"]:
-                    tree = MonotonicDecisionTree(
+                    tree = TreeClass(
+                        direction=direction,
+                        delta=self.delta,
+                        n_classes=self.n_classes_,
+                    )
+                    tree.classes_ = np.arange(self.n_classes_)
+                    tree.fit(inner_train_X, inner_train_y, feature_indices=reduct)
+                    inner_trees.append(tree)
+
+            # Step 7: Score on inner_val (held-out fold).
+            y_pred = self._predict_with_trees(inner_trees, inner_val_X)
+            acc = Evaluator.classification_accuracy(inner_val_y, y_pred)
+
+            # Step 8: Track best σ.
+            if acc > best_accuracy:
+                best_accuracy = acc
+                best_inner_trees = inner_trees
+                best_sigma = sigma_val
+                best_reducts = reducts
+
+        # Step 9: When the inner split chopped 20% off training, rebuild final
+        # trees on the FULL training set with the chosen σ's reducts. With a
+        # caller-supplied eval, inner_train was already the full set so the
+        # trees from Step 6 are reusable.
+        if best_sigma is not None and using_internal_split:
+            final_trees = []
+            for reduct in best_reducts:
+                for direction in ["ascending", "descending"]:
+                    tree = TreeClass(
                         direction=direction,
                         delta=self.delta,
                         n_classes=self.n_classes_,
                     )
                     tree.classes_ = np.arange(self.n_classes_)
                     tree.fit(X_adjusted, y_ordinal, feature_indices=reduct)
-                    trees.append(tree)
+                    final_trees.append(tree)
+            self.trees = final_trees
+        else:
+            self.trees = best_inner_trees
 
-            # Step 7: Fuse DSL on eval target (paper Alg 4 line 12: acc on X)
-            if eval_X_adj is not None:
-                target_X, target_y = eval_X_adj, eval_y_ord
-            else:
-                target_X, target_y = X_adjusted, y_ordinal
-            y_pred = self._predict_with_trees(trees, target_X)
-            acc = Evaluator.classification_accuracy(target_y, y_pred)
-
-            # Step 8: Track best sigma
-            if acc > best_accuracy:
-                best_accuracy = acc
-                best_trees = trees
-                best_sigma = sigma_val
-                best_n_reducts = len(reducts)
-
-        self.trees = best_trees
         self.best_sigma = best_sigma
-        self.n_reducts = best_n_reducts
+        self.n_reducts = len(best_reducts) if best_reducts is not None else 0
         return self
 
     def _predict_with_trees(self, trees, X_adjusted):

@@ -80,21 +80,60 @@ DATASETS = {
         label_mapping={'benign': 0, 'malignant': 1},
         allow_missing_values=True,
     ),
-    'arcene':          DatasetMeta(openml_name='arcene'),
-    'breast-cancer':   DatasetMeta(openml_name='breast-cancer'),
-    'diabetes':        DatasetMeta(openml_name='diabetes'),
-    'divorce':         DatasetMeta(openml_name='divorce_prediction'),
-    'german-credit':   DatasetMeta(openml_name='credit-g'),
-    'heart-disease':   DatasetMeta(openml_name='heart-statlog'),
-    'hepatitis':       DatasetMeta(openml_name='hepatitis'),
-    'SMK_CAN_187':     DatasetMeta(openml_name='SMK'),
-    'sonar':           DatasetMeta(openml_name='sonar'),
-    'turkiye-student': DatasetMeta(openml_name='turkiye-student-evaluation'),
-    'vehicle':         DatasetMeta(openml_name='vehicle'),
-    'wdbc':            DatasetMeta(openml_name='wdbc'),
-    'wine-quality':    DatasetMeta(openml_name='wine-quality-white'),
+    'arcene':          DatasetMeta(
+        openml_name='arcene',
+        label_mapping={'2': 0, '1': 1},
+    ),
+    'breast-cancer':   DatasetMeta(
+        label_mapping={'no-recurrence-events': 0, 'recurrence-events': 1},
+        allow_missing_values=True,
+    ),
+    'diabetes':        DatasetMeta(
+        label_mapping={'tested_negative': 0, 'tested_positive': 1},
+        allow_missing_values=True,
+    ),
+    'divorce':         DatasetMeta(
+        openml_name='divorce_prediction',
+        label_mapping={'0': 0, '1': 1},
+    ),
+    'german-credit':   DatasetMeta(
+        label_mapping={'good': 0, 'bad': 1},
+    ),
+    'heart-disease':   DatasetMeta(
+        label_mapping={'absent': 0, 'present': 1},
+        allow_missing_values=True,
+    ),
+    'hepatitis':       DatasetMeta(
+        label_mapping={'LIVE': 0, 'DIE': 1},
+        allow_missing_values=True,
+    ),
+    'SMK_CAN_187':     DatasetMeta(
+        openml_name='SMK',
+        label_mapping={'1': 0, '2': 1},
+    ),
+    'sonar':           DatasetMeta(
+        openml_name='sonar',
+        label_mapping={'Rock': 0, 'Mine': 1},
+    ),
+    'turkiye-student': DatasetMeta(
+        label_mapping={'1': 0, '2': 1, '3': 2, '4': 3, '5': 4},
+    ),
+    'vehicle':         DatasetMeta(
+        label_mapping={'opel': 0, 'saab': 1, 'van': 2, 'bus': 3},
+    ),
+    'wdbc':            DatasetMeta(
+        openml_name='wdbc',
+        label_mapping={'1': 0, '2': 1},
+    ),
+    'wine-quality':    DatasetMeta(
+        openml_name='wine-quality-white',
+        label_mapping={'1': 0, '2': 1, '3': 2, '4': 3, '5': 4, '6': 5, '7': 6},
+    ),
+    'wine':            DatasetMeta(
+        label_mapping={'1': 0, '2': 1, '3': 2},
+        allow_missing_values=True,
+    ),
     # Custom-loaded (handled by DatasetRegistry in datasets/loader.py)
-    'wine':            DatasetMeta(),
     'Yale':            DatasetMeta(),
     'DrivFace':        DatasetMeta(),
     'PEMS-SF':         DatasetMeta(),
@@ -138,6 +177,7 @@ class BFMDTConfig:
 
     # Algorithm version
     fitting_version: int = 1
+    tree_version: int = 1
 
 
 def _parse_sigma(value):
@@ -250,6 +290,12 @@ def parse_args(argv=None) -> BFMDTConfig:
         help="Fitting degree algorithm version: 1 = paper Algorithm 2 as published, "
              "2 = symmetric directional-inversion variant (default: 1)",
     )
+    parser.add_argument(
+        "--tree-version", type=int, choices=[1, 2], default=1,
+        help="Monotonic decision tree version: 1 = matches paper Fig 3 / current "
+             "tests (RMI dual + lower-bound splits), 2 = strict paper Eq 13/14/16 "
+             "(ARMI=LEFT-sum, DRMI=RIGHT-sum, midpoint splits) (default: 1)",
+    )
 
     args = parser.parse_args(argv)
 
@@ -267,4 +313,5 @@ def parse_args(argv=None) -> BFMDTConfig:
         report=args.report,
         dataset_names=_resolve_dataset_arg(args.datasets),
         fitting_version=args.fitting_version,
+        tree_version=args.tree_version,
     )

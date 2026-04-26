@@ -17,14 +17,16 @@ import time
 from datetime import datetime
 
 import numpy as np
+import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
-from config import BFMDTConfig, DATASETS, REPORTS_DIR, parse_args
+from config import BFMDTConfig, DATA_DIR, DATASETS, NAME_TO_ID, REPORTS_DIR, parse_args
 from datasets.loader import load_dataset
 from bfmdt import BFMDTClassifier
 from bfmdt.metrics import Evaluator
+from bfmdt.preprocessing import Preprocessor
 from reporting import (
     DatasetResult,
     FoldResult,
@@ -86,14 +88,15 @@ def _choose_splitter(name, config: BFMDTConfig):
 def _train_one_fold(X_train, y_train, X_test, y_test, config: BFMDTConfig, allow_missing=False) -> FoldResult:
     """Fit classifier on train split and evaluate on test split.
 
-    Passes (X_test, y_test) as eval to the classifier so σ is selected by
-    accuracy on the test fold — matches paper Algorithm 4 line 12 which
-    computes accuracy on the prediction set X when choosing σ_best.
+    Test fold is passed as X_eval/y_eval so σ is selected by accuracy on
+    the same fold that gets reported -- matches paper Algorithm 4 line 12
+    (intentional σ-into-test leakage to reproduce the paper protocol).
     """
     clf = BFMDTClassifier(
         sigma=config.sigma, delta=config.delta, max_reducts=config.max_reducts,
         allow_missing=allow_missing,
         fitting_version=config.fitting_version,
+        tree_version=config.tree_version,
         min_sigma_candidates=config.min_sigma_candidates,
         max_sigma_candidates=config.max_sigma_candidates,
         max_sigma_iterations=config.max_sigma_iterations,
@@ -123,6 +126,27 @@ def _needs_extra_holdout(config: BFMDTConfig, n_iters: int) -> bool:
     )
 
 
+def _save_postprocessed(name, X, y, allow_missing):
+    """Dump the post-preprocessed dataset alongside the raw CSV for inspection.
+
+    Fits the same Preprocessor the classifier uses on the FULL dataset and
+    writes datasets/data/{id:02d}_{name}_postprocessing.csv. Per-fold scaling
+    differs slightly from this snapshot, which is expected — the file is for
+    sanity-checking the preprocessing logic, not for re-feeding the pipeline.
+    """
+    if name not in NAME_TO_ID:
+        return
+    pre = Preprocessor(allow_missing=allow_missing)
+    X_clean, y_clean = pre.fit_transform(X, y)
+    out_path = os.path.join(
+        DATA_DIR, f"{NAME_TO_ID[name]:02d}_{name}_postprocessing.csv"
+    )
+    df = pd.DataFrame(X_clean, columns=[f"f{i}" for i in range(X_clean.shape[1])])
+    df["label"] = y_clean
+    df.to_csv(out_path, index=False)
+    print(f"  Saved postprocessed CSV: {os.path.relpath(out_path)} ({df.shape})")
+
+
 def run_dataset(name, config: BFMDTConfig) -> DatasetResult:
     """Load a dataset, run the configured protocol, and return per-fold metrics."""
     print(f"\n{'=' * 60}")
@@ -139,6 +163,7 @@ def run_dataset(name, config: BFMDTConfig) -> DatasetResult:
     print(f"  Protocol: {protocol}")
 
     allow_missing = DATASETS[name].allow_missing_values if name in DATASETS else False
+    _save_postprocessed(name, X, y, allow_missing)
 
     folds = []
     start = time.time()
@@ -171,12 +196,32 @@ def run_dataset(name, config: BFMDTConfig) -> DatasetResult:
     return result
 
 
+def _resolve_log_path(config: BFMDTConfig) -> str:
+    """Compose reports/{dataset|all}/v{N}/delta_{delta}/seed_{seed}/{timestamp}.log.
+
+    `v{N}` assumes fitting_version == tree_version (the usual case); falls back
+    to `f{fv}t{tv}` if they diverge.
+    """
+    bucket = config.dataset_names[0] if len(config.dataset_names) == 1 else "all"
+    if config.fitting_version == config.tree_version:
+        version_label = f"v{config.fitting_version}"
+    else:
+        version_label = f"f{config.fitting_version}t{config.tree_version}"
+    run_dir = os.path.join(
+        REPORTS_DIR,
+        bucket,
+        version_label,
+        f"delta_{config.delta}",
+        f"seed_{config.random_seed}",
+    )
+    os.makedirs(run_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return os.path.join(run_dir, f"{timestamp}.log")
+
+
 def main():
     config = parse_args()
-
-    os.makedirs(REPORTS_DIR, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_path = os.path.join(REPORTS_DIR, f"run_{config.mode}_{timestamp}.log")
+    log_path = _resolve_log_path(config)
 
     with _Tee(log_path):
         results = [run_dataset(name, config) for name in config.dataset_names]
