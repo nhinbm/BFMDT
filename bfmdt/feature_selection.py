@@ -26,7 +26,7 @@ class FeatureSelector:
 
         # Sort the rows in ascending by each row sum
         row_sums = M_sigma.sum(axis=1)
-        sorted_indices = np.argsort(row_sums)
+        sorted_indices = np.argsort(row_sums, kind="stable")
         M_sorted = M_sigma[sorted_indices]
 
         # Remove the rows that are all 0 or all 1
@@ -53,29 +53,37 @@ class FeatureSelector:
 
             red = [a_k]
 
-            # Create a working copy of M* for this iteration
+            # Per Algorithm 3 line 7: each OFS iteration starts fresh — copy M*
+            # and a full feature set. Only the current a_k leaves the available
+            # set (line 10), so other OFS features stay reachable for the inner
+            # greedy. Dedup at the end (the `seen` set) collapses any reducts
+            # produced by different seeds that converge to the same set.
             M_temp = M_star.copy()
             available_features = list(range(n_features))
 
-            # Update M*: delete the rows satisfied by the selected feature
             rows_to_keep = M_temp[:, a_k] == 0
             M_temp = M_temp[rows_to_keep]
+            available_features.remove(a_k)
 
-            # Update m': exclude current OFS feature and all other OFS features
-            # (Algorithm 3: A is updated globally across OFS iterations)
-            for ofs_feat in OFS:
-                if ofs_feat in available_features:
-                    available_features.remove(ofs_feat)
-
+            ofs_set = set(OFS)
             while M_temp.shape[0] > 0 and len(available_features) > 0:
                 # Greedily pick the feature that covers the most remaining rows
                 col_sums = M_temp[:, available_features].sum(axis=0)
 
                 # Break if no remaining feature covers any remaining row
-                if np.max(col_sums) == 0:
+                max_sum = col_sums.max()
+                if max_sum == 0:
                     break
 
-                best_idx_relative = np.argmax(col_sums)
+                # Tie-break: prefer non-OFS features so a seed=a_k branch does
+                # not pull in another OFS feature that another seed already owns,
+                # which would produce a non-minimal reduct (e.g. {b, d} when {b}
+                # is already a reduct from the b-seed branch).
+                tied = np.where(col_sums == max_sum)[0]
+                non_ofs_tied = [
+                    i for i in tied if available_features[i] not in ofs_set
+                ]
+                best_idx_relative = non_ofs_tied[0] if non_ofs_tied else tied[0]
                 best_feature = available_features[best_idx_relative]
 
                 # Add feature to reduct
@@ -85,7 +93,7 @@ class FeatureSelector:
                 rows_to_keep = M_temp[:, best_feature] == 0
                 M_temp = M_temp[rows_to_keep]
 
-                # Update m': delete the selected column
+                # Update m': remove the selected feature from the available set
                 available_features.remove(best_feature)
 
             key = tuple(sorted(red))

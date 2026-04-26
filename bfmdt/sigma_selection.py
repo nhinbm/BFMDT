@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 
 
@@ -5,26 +7,26 @@ class SigmaSelector:
     """Find threshold candidates from the fitting degree matrix.
 
     Args:
-        fitting_matrix (np.ndarray): Fitting degree matrix of shape (n_samples, n_features).
         min_candidates (int): Minimum number of sigma candidates. Defaults to 5.
         max_candidates (int): Maximum number of sigma candidates. Defaults to 30.
+        max_iterations (int): Hard cap on sp adjustment iterations. Defaults to 1000.
 
     Returns:
         sigmas (list[float]): List of sigma candidate values.
     """
 
-    def __init__(self, min_candidates=5, max_candidates=30):
+    def __init__(self, min_candidates=5, max_candidates=30, max_iterations=1000):
         self.min_candidates = min_candidates
         self.max_candidates = max_candidates
+        self.max_iterations = max_iterations
 
     def select(self, fitting_matrix):
         """Select sigma candidates from fitting degree matrix values.
 
-        For small datasets where the number of unique fitting degree values
-        is within the allowed range, all values are used (exhaustive search).
-        For large datasets, frequency-based pruning selects values whose
-        frequency exceeds L/sp, adjusting sp until the candidate count
-        falls within [min_candidates, max_candidates] (Section 5.4.1).
+        Frequency-based pruning per Section 5.4.1: candidates are values
+        whose frequency exceeds L/sp. sp is adjusted by factors of 1.1
+        (increase) or 0.9 (decrease) until the candidate count falls
+        within [min_candidates, max_candidates].
 
         Args:
             fitting_matrix (np.ndarray): Fitting degree matrix of shape
@@ -35,18 +37,12 @@ class SigmaSelector:
         """
         unique_values, counts = np.unique(fitting_matrix, return_counts=True)
 
-        # Small dataset: exhaustive search with all unique values
-        if len(unique_values) <= self.max_candidates:
-            return sorted(unique_values.tolist())
-
-        # Large dataset: frequency-based pruning
         n_samples, n_features = fitting_matrix.shape
         L = max(n_samples, n_features)
 
         sp = 1.0
-        max_iterations = 1000
 
-        for _ in range(max_iterations):
+        for _ in range(self.max_iterations):
             threshold = L / sp
             mask = counts > threshold
             n_candidates = mask.sum()
@@ -57,6 +53,15 @@ class SigmaSelector:
                 sp *= 1.1
             else:
                 sp *= 0.9
+        else:
+            warnings.warn(
+                f"SigmaSelector: sp adjustment did not converge in "
+                f"{self.max_iterations} iterations; returning {n_candidates} "
+                f"candidates outside target range "
+                f"[{self.min_candidates}, {self.max_candidates}].",
+                RuntimeWarning,
+                stacklevel=2,
+            )
 
         sigmas = sorted(unique_values[mask].tolist())
         return sigmas

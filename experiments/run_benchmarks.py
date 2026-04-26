@@ -2,41 +2,153 @@
 """Run BFMDT benchmarks on datasets from the paper.
 
 Usage:
-    python experiments/run_benchmarks.py                                # breast-wisconsin only
+    python experiments/run_benchmarks.py
     python experiments/run_benchmarks.py --datasets breast-wisconsin wine
-    python experiments/run_benchmarks.py --datasets all                 # all registered datasets
+    python experiments/run_benchmarks.py --datasets 1 2 14
+    python experiments/run_benchmarks.py --datasets all
+    python experiments/run_benchmarks.py --mode sigma-analysis
+
+Results (CSV + log) are written to reports/ with a timestamp suffix.
 """
 
-import sys
 import os
+import sys
 import time
-import argparse
+from datetime import datetime
+
 import numpy as np
+import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from sklearn.model_selection import StratifiedKFold
-from datasets.loader import load_dataset, list_available_datasets
+from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
+from config import BFMDTConfig, DATA_DIR, DATASETS, NAME_TO_ID, REPORTS_DIR, parse_args
+from datasets.loader import load_dataset
 from bfmdt import BFMDTClassifier
 from bfmdt.metrics import Evaluator
+from bfmdt.preprocessing import Preprocessor
+from reporting import (
+    DatasetResult,
+    FoldResult,
+    print_ca_mae_table,
+    print_dataset_summary,
+    print_reducts_table,
+    print_sigma_analysis_table,
+    print_time_table,
+)
 
 
-def run_single_dataset(name, n_folds=5, random_seed=42, sigma="auto",
-                       delta=0.01, max_reducts=50):
-    """Run stratified k-fold CV on a single dataset.
+class _Tee:
+    """Duplicate stdout writes to a log file. Use as a context manager."""
 
-    Args:
-        name (str): Dataset name recognized by load_dataset().
-        n_folds (int): Number of CV folds.
-        random_seed (int): Random seed for reproducibility.
-        sigma (float | str): Fitting degree threshold or 'auto'.
-        delta (float): RMI threshold.
-        max_reducts (int): Max feature subsets per sigma.
+    def __init__(self, log_path):
+        self.log_path = log_path
+        self._file = None
+        self._stdout = None
 
-    Returns:
-        dict: Results with keys 'dataset', 'mean_ca', 'std_ca',
-              'mean_mae', 'std_mae', 'fold_cas', 'fold_maes', 'elapsed'.
+    def __enter__(self):
+        self._file = open(self.log_path, "w", buffering=1, encoding="utf-8")
+        self._stdout = sys.stdout
+        sys.stdout = self
+        return self
+
+    def __exit__(self, *_):
+        sys.stdout = self._stdout
+        self._file.close()
+
+    def write(self, data):
+        self._stdout.write(data)
+        self._file.write(data)
+
+    def flush(self):
+        self._stdout.flush()
+        self._file.flush()
+
+
+def _choose_splitter(name, config: BFMDTConfig):
+    """Return (splitter, protocol_label, n_iters) based on mode and dataset.
+
+    PEMS-SF always uses holdout (paper convention for its 138672 features).
     """
+    use_holdout = name == "PEMS-SF"
+    if use_holdout:
+        splitter = StratifiedShuffleSplit(
+            n_splits=1, test_size=config.test_size, random_state=config.random_seed
+        )
+        train_pct = int((1 - config.test_size) * 100)
+        test_pct = int(config.test_size * 100)
+        return splitter, f"{train_pct}:{test_pct} holdout", 1
+
+    splitter = StratifiedKFold(
+        n_splits=config.n_folds, shuffle=True, random_state=config.random_seed
+    )
+    return splitter, f"{config.n_folds}-fold stratified CV", config.n_folds
+
+
+def _train_one_fold(X_train, y_train, X_test, y_test, config: BFMDTConfig, allow_missing=False) -> FoldResult:
+    """Fit classifier on train split and evaluate on test split.
+
+    Test fold is passed as X_eval/y_eval so σ is selected by accuracy on
+    the same fold that gets reported -- matches paper Algorithm 4 line 12
+    (intentional σ-into-test leakage to reproduce the paper protocol).
+    """
+    clf = BFMDTClassifier(
+        sigma=config.sigma, delta=config.delta, max_reducts=config.max_reducts,
+        allow_missing=allow_missing,
+        fitting_version=config.fitting_version,
+        tree_version=config.tree_version,
+        min_sigma_candidates=config.min_sigma_candidates,
+        max_sigma_candidates=config.max_sigma_candidates,
+        max_sigma_iterations=config.max_sigma_iterations,
+    )
+    clf.fit(X_train, y_train, X_eval=X_test, y_eval=y_test)
+    y_pred = clf.predict(X_test)
+
+    return FoldResult(
+        ca=Evaluator.classification_accuracy(y_test, y_pred),
+        mae=Evaluator.mean_absolute_error_ordinal(y_test, y_pred),
+        best_sigma=clf.best_sigma,
+        n_sigma_candidates=clf.n_sigma_candidates,
+        n_reducts=clf.n_reducts,
+    )
+
+
+def _needs_extra_holdout(config: BFMDTConfig, n_iters: int) -> bool:
+    """Whether reporting mode should run an extra 80:20 holdout for the σ table.
+
+    Skipped when: not reporting mode, σ table not requested, or the main
+    protocol is already holdout (n_iters == 1, e.g. PEMS-SF).
+    """
+    return (
+        config.mode == "reporting"
+        and config.report in ("sigma", "all")
+        and n_iters > 1
+    )
+
+
+def _save_postprocessed(name, X, y, allow_missing):
+    """Dump the post-preprocessed dataset alongside the raw CSV for inspection.
+
+    Fits the same Preprocessor the classifier uses on the FULL dataset and
+    writes datasets/data/{id:02d}_{name}_postprocessing.csv. Per-fold scaling
+    differs slightly from this snapshot, which is expected — the file is for
+    sanity-checking the preprocessing logic, not for re-feeding the pipeline.
+    """
+    if name not in NAME_TO_ID:
+        return
+    pre = Preprocessor(allow_missing=allow_missing)
+    X_clean, y_clean = pre.fit_transform(X, y)
+    out_path = os.path.join(
+        DATA_DIR, f"{NAME_TO_ID[name]:02d}_{name}_postprocessing.csv"
+    )
+    df = pd.DataFrame(X_clean, columns=[f"f{i}" for i in range(X_clean.shape[1])])
+    df["label"] = y_clean
+    df.to_csv(out_path, index=False)
+    print(f"  Saved postprocessed CSV: {os.path.relpath(out_path)} ({df.shape})")
+
+
+def run_dataset(name, config: BFMDTConfig) -> DatasetResult:
+    """Load a dataset, run the configured protocol, and return per-fold metrics."""
     print(f"\n{'=' * 60}")
     print(f"Dataset: {name}")
     print(f"{'=' * 60}")
@@ -47,92 +159,84 @@ def run_single_dataset(name, n_folds=5, random_seed=42, sigma="auto",
     n_classes = len(np.unique(y))
     print(f"  Samples: {n_samples}, Features: {n_features}, Classes: {n_classes}")
 
-    skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=random_seed)
+    splitter, protocol, n_iters = _choose_splitter(name, config)
+    print(f"  Protocol: {protocol}")
 
-    fold_cas = []
-    fold_maes = []
+    allow_missing = DATASETS[name].allow_missing_values if name in DATASETS else False
+    _save_postprocessed(name, X, y, allow_missing)
+
+    folds = []
     start = time.time()
+    for iter_idx, (train_idx, test_idx) in enumerate(splitter.split(X, y), 1):
+        fold = _train_one_fold(
+            X[train_idx], y[train_idx], X[test_idx], y[test_idx], config, allow_missing
+        )
+        folds.append(fold)
+        label = "Holdout" if n_iters == 1 else f"Fold {iter_idx}/{n_iters}"
+        print(f"  {label}: CA={fold.ca:.4f}, MAE={fold.mae:.4f}")
 
-    for fold_idx, (train_idx, test_idx) in enumerate(skf.split(X, y), 1):
-        X_train, X_test = X[train_idx], X[test_idx]
-        y_train, y_test = y[train_idx], y[test_idx]
+    holdout_fold = None
+    if _needs_extra_holdout(config, n_iters):
+        print("  [σ-analysis] extra 80:20 holdout run...")
+        extra_splitter = StratifiedShuffleSplit(
+            n_splits=1, test_size=config.test_size, random_state=config.random_seed
+        )
+        tr_idx, te_idx = next(extra_splitter.split(X, y))
+        holdout_fold = _train_one_fold(
+            X[tr_idx], y[tr_idx], X[te_idx], y[te_idx], config, allow_missing
+        )
+        print(f"  Holdout: CA={holdout_fold.ca:.4f}, MAE={holdout_fold.mae:.4f}")
 
-        clf = BFMDTClassifier(sigma=sigma, delta=delta, max_reducts=max_reducts)
-        clf.fit(X_train, y_train)
-        y_pred = clf.predict(X_test)
+    result = DatasetResult(
+        dataset=name, protocol=protocol, folds=folds,
+        elapsed=time.time() - start, n_features=n_features,
+        holdout_fold=holdout_fold,
+    )
+    print_dataset_summary(result)
+    return result
 
-        ca = Evaluator.classification_accuracy(y_test, y_pred)
-        mae = Evaluator.mean_absolute_error_ordinal(y_test, y_pred)
-        fold_cas.append(ca)
-        fold_maes.append(mae)
-        print(f"  Fold {fold_idx}/{n_folds}: CA={ca:.4f}, MAE={mae:.4f}")
 
-    elapsed = time.time() - start
-    mean_ca = np.mean(fold_cas)
-    std_ca = np.std(fold_cas)
-    mean_mae = np.mean(fold_maes)
-    std_mae = np.std(fold_maes)
+def _resolve_log_path(config: BFMDTConfig) -> str:
+    """Compose reports/{dataset|all}/v{N}/delta_{delta}/seed_{seed}/{timestamp}.log.
 
-    print(f"\n  Mean CA:  {mean_ca:.4f} +/- {std_ca:.4f}")
-    print(f"  Mean MAE: {mean_mae:.4f} +/- {std_mae:.4f}")
-    print(f"  Time: {elapsed:.1f}s")
-
-    return {
-        "dataset": name,
-        "mean_ca": mean_ca,
-        "std_ca": std_ca,
-        "mean_mae": mean_mae,
-        "std_mae": std_mae,
-        "fold_cas": fold_cas,
-        "fold_maes": fold_maes,
-        "elapsed": elapsed,
-    }
+    `v{N}` assumes fitting_version == tree_version (the usual case); falls back
+    to `f{fv}t{tv}` if they diverge.
+    """
+    bucket = config.dataset_names[0] if len(config.dataset_names) == 1 else "all"
+    if config.fitting_version == config.tree_version:
+        version_label = f"v{config.fitting_version}"
+    else:
+        version_label = f"f{config.fitting_version}t{config.tree_version}"
+    run_dir = os.path.join(
+        REPORTS_DIR,
+        bucket,
+        version_label,
+        f"delta_{config.delta}",
+        f"seed_{config.random_seed}",
+    )
+    os.makedirs(run_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return os.path.join(run_dir, f"{timestamp}.log")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="BFMDT Benchmark Runner")
-    parser.add_argument(
-        "--datasets", nargs="+", default=["breast-wisconsin"],
-        help="Dataset names to test (default: breast-wisconsin). Use 'all' for all.",
-    )
-    parser.add_argument("--sigma", type=str, default="auto")
-    parser.add_argument("--delta", type=float, default=0.01)
-    parser.add_argument("--max-reducts", type=int, default=50)
-    parser.add_argument("--n-folds", type=int, default=5)
-    parser.add_argument("--seed", type=int, default=0)
-    args = parser.parse_args()
+    config = parse_args()
+    log_path = _resolve_log_path(config)
 
-    if args.datasets == ["all"]:
-        dataset_names = list_available_datasets()
-    else:
-        dataset_names = args.datasets
+    with _Tee(log_path):
+        results = [run_dataset(name, config) for name in config.dataset_names]
 
-    sigma = args.sigma if args.sigma == "auto" else float(args.sigma)
+        if config.mode == "reporting":
+            if config.report in ("sigma", "all"):
+                print_sigma_analysis_table(results)
+            if config.report in ("ca-mae", "all"):
+                print_ca_mae_table(results)
+            if config.report in ("reducts", "all"):
+                print_reducts_table(results)
+            if config.report in ("time", "all"):
+                print_time_table(results)
 
-    print(f"Config: sigma={sigma}, delta={args.delta}, max_reducts={args.max_reducts}, "
-          f"n_folds={args.n_folds}, seed={args.seed}")
-
-    results = []
-    for name in dataset_names:
-        result = run_single_dataset(
-            name,
-            n_folds=args.n_folds,
-            random_seed=args.seed,
-            sigma=sigma,
-            delta=args.delta,
-            max_reducts=args.max_reducts,
-        )
-        results.append(result)
-
-    if len(results) > 1:
-        print(f"\n{'=' * 60}")
-        print("SUMMARY")
-        print(f"{'=' * 60}")
-        print(f"{'Dataset':<25} {'CA':>10} {'MAE':>10} {'Time':>8}")
-        print("-" * 55)
-        for r in results:
-            print(f"{r['dataset']:<25} {r['mean_ca']:>10.4f} {r['mean_mae']:>10.4f} "
-                  f"{r['elapsed']:>7.1f}s")
+        print(f"\nSaved full log: {os.path.relpath(log_path)}")
 
 
 if __name__ == "__main__":

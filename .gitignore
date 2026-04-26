@@ -5,3 +5,7 @@ venv/
 __pycache__/
 *.log
 datasets/data/
+reports/
+
+# Environment
+mise.toml
